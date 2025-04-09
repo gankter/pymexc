@@ -437,13 +437,14 @@ class _FuturesWebSocketManager(_WebSocketManager):
             # remove callback
             self._pop_callback(method)
             # send unsub message
-            self.ws.send(json.dumps({"method": f"unsub.{method}", "param": {}}))
+            param = {}
             # remove subscription from list
             for sub in self.subscriptions:
                 if sub["method"] == f"sub.{method}":
                     self.subscriptions.remove(sub)
+                    param = sub["param"]
                     break
-
+            self.ws.send(json.dumps({"method": f"unsub.{method}", "param": param}))
             logger.debug(f"Unsubscribed from {method}")
         else:
             # this is a func, get name
