@@ -429,7 +429,7 @@ class _FuturesWebSocketManager(_WebSocketManager):
         self._set_callback(self._topic(topic), callback)
         self.last_subsctiption = self._topic(topic)
 
-    def unsubscribe(self, method: str | Callable, param:dict = {}) -> None:
+    def unsubscribe(self, method: str | Callable, param: dict = {}) -> None:
         if not method:
             return
         
@@ -443,9 +443,7 @@ class _FuturesWebSocketManager(_WebSocketManager):
             # remove callback
             self._pop_callback(method)
             # send unsub message
-            _param = {}
-            # remove subscription from list
-            
+            # remove subscription from list  
             if not param:
                 for sub in self.subscriptions:
                     if _cond_no_param(sub):
@@ -455,6 +453,7 @@ class _FuturesWebSocketManager(_WebSocketManager):
                 for sub in self.subscriptions:
                     if _cond_with_param(sub):
                         self.subscriptions.remove(sub)
+                        
                         self.ws.send(json.dumps({"method": f"unsub.{method}", "param": param}))
 
             logger.debug(f"Unsubscribed from {method}")
