@@ -433,10 +433,10 @@ class _FuturesWebSocketManager(_WebSocketManager):
         if not method:
             return
         
-        def _cond_with_param():
+        def _cond_with_param(sub):
             return sub["method"] == f"sub.{method}" and sub["param"] == param
         
-        def _cond_no_param():
+        def _cond_no_param(sub):
             return sub["method"] == f"sub.{method}"
 
         if isinstance(method, str):
@@ -446,14 +446,14 @@ class _FuturesWebSocketManager(_WebSocketManager):
             _param = {}
             # remove subscription from list
             
-            if _cond_no_param():
+            if not param:
                 for sub in self.subscriptions:
-                    self.subscriptions.remove(sub)
-                    self.ws.send(json.dumps({"method": f"unsub.{method}", "param": sub["param"]}))
-                    
-            if _cond_with_param():
+                    if _cond_no_param(sub):
+                        self.subscriptions.remove(sub)
+                        self.ws.send(json.dumps({"method": f"unsub.{method}", "param": sub["param"]}))
+            else:  
                 for sub in self.subscriptions:
-                    if param == sub["param"]:
+                    if _cond_with_param(sub):
                         self.subscriptions.remove(sub)
                         self.ws.send(json.dumps({"method": f"unsub.{method}", "param": param}))
 
