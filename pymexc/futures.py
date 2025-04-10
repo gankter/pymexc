@@ -1508,7 +1508,7 @@ class WebSocket(_FuturesWebSocket):
         if personal_callback:
             self.connect()
 
-    def unsubscribe(self, method: str | Callable):
+    def unsubscribe(self, method: str | Callable, param = {}):
         personal_filters = ["personal.filter", "filter", "personal"]
         if (
             method in personal_filters
@@ -1517,7 +1517,7 @@ class WebSocket(_FuturesWebSocket):
         ):
             return self.personal_stream(lambda: ...)
 
-        return super().unsubscribe(method)
+        return super().unsubscribe(method,param=param)
 
     def tickers_stream(self, callback: Callable[..., None]):
         """
