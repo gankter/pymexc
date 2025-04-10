@@ -361,7 +361,7 @@ class _WebSocketManager:
             if self.callback_directory.get(topic)
             else None
         )
-
+    
     def _process_normal_message(self, message: dict):
         """
         Redirect message to callback function
@@ -450,14 +450,10 @@ class _FuturesWebSocketManager(_WebSocketManager):
                 for sub in self.subscriptions:
                     self.subscriptions.remove(sub)
                     self.ws.send(json.dumps({"method": f"unsub.{method}", "param": sub["param"]}))
-
-            if _cond_with_param():
-                for sub in self.subscriptions:
                     
-                    param = sub["param"]
-                    break
-            
-            
+            if _cond_with_param():
+                self.ws.send(json.dumps({"method": f"unsub.{method}", "param": param}))
+
             logger.debug(f"Unsubscribed from {method}")
         else:
             # this is a func, get name
