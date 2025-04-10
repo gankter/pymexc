@@ -452,7 +452,10 @@ class _FuturesWebSocketManager(_WebSocketManager):
                     self.ws.send(json.dumps({"method": f"unsub.{method}", "param": sub["param"]}))
                     
             if _cond_with_param():
-                self.ws.send(json.dumps({"method": f"unsub.{method}", "param": param}))
+                for sub in self.subscriptions:
+                    if param == sub["param"]:
+                        self.subscriptions.remove(sub)
+                        self.ws.send(json.dumps({"method": f"unsub.{method}", "param": param}))
 
             logger.debug(f"Unsubscribed from {method}")
         else:
