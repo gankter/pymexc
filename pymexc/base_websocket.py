@@ -442,7 +442,7 @@ class _FuturesWebSocketManager(_WebSocketManager):
         if isinstance(method, str):
             # remove callback
             
-            print(self.subscriptions)
+            #print(self.subscriptions)
             # send unsub message
             # remove subscription from list  
             if param is None:
