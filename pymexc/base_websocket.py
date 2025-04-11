@@ -3,7 +3,7 @@ import json
 import logging
 import threading
 import time
-from typing import Callable, Dict, List, Union
+from typing import Callable, Dict, List, Union,Optional
 
 import websocket
 
@@ -429,11 +429,11 @@ class _FuturesWebSocketManager(_WebSocketManager):
         self._set_callback(self._topic(topic), callback)
         self.last_subsctiption = self._topic(topic)
 
-    def unsubscribe(self, method: str | Callable, param: dict = {}) -> None:
+    def unsubscribe(self, method: str | Callable, param: Optional[dict] = None) -> None:
         if not method:
             return
         
-        def _cond_with_param(sub):
+        def _cond_with_param(sub,param):
             return sub["method"] == f"sub.{method}" and sub["param"] == param
         
         def _cond_no_param(sub):
@@ -441,17 +441,20 @@ class _FuturesWebSocketManager(_WebSocketManager):
 
         if isinstance(method, str):
             # remove callback
-            self._pop_callback(method)
+            
+            print(self.subscriptions)
             # send unsub message
             # remove subscription from list  
-            if not param:
-                for sub in self.subscriptions:
+            if param is None:
+                for sub in self.subscriptions.copy():
                     if _cond_no_param(sub):
+                        self._pop_callback(method)
                         self.ws.send(json.dumps({"method": f"unsub.{method}", "param": sub["param"]}))
                         self.subscriptions.remove(sub)
             else:  
-                for sub in self.subscriptions:
-                    if _cond_with_param(sub):
+                for sub in self.subscriptions.copy():
+                    if _cond_with_param(sub,param):
+                        self._pop_callback(method)
                         self.ws.send(json.dumps({"method": f"unsub.{method}", "param": param}))
                         self.subscriptions.remove(sub)
 
@@ -460,7 +463,7 @@ class _FuturesWebSocketManager(_WebSocketManager):
             # this is a func, get name
             topic_name = method.__name__.replace("_stream", "").replace("_", ".")
 
-            return self.unsubscribe(topic_name)
+            return self.unsubscribe(topic_name,param)
 
     def _process_auth_message(self, message):
         # If we get successful futures auth, notify user
