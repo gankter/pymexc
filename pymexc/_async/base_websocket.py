@@ -446,20 +446,34 @@ class _FuturesWebSocketManager(_WebSocketManager):
         self._set_callback(self._topic(topic), callback)
         self.last_subsctiption = self._topic(topic)
 
-    async def unsubscribe(self, method: str | Callable) -> None:
+    async def unsubscribe(self, method: str | Callable,param) -> None:
         if not method:
             return
 
+        def _cond_with_param(sub,param):
+            return sub["method"] == f"sub.{method}" and sub["param"] == param
+        
+        def _cond_no_param(sub):
+            return sub["method"] == f"sub.{method}"
+        
         if isinstance(method, str):
             # remove callback
-            self._pop_callback(method)
+            
+            print(self.subscriptions)
             # send unsub message
-            await self.ws.send(json.dumps({"method": f"unsub.{method}", "param": {}}))
-            # remove subscription from list
-            for sub in self.subscriptions:
-                if sub["method"] == f"sub.{method}":
-                    self.subscriptions.remove(sub)
-                    break
+            # remove subscription from list  
+            if param is None:
+                for sub in self.subscriptions.copy():
+                    if _cond_no_param(sub):
+                        self._pop_callback(method)
+                        await self.ws.send(json.dumps({"method": f"unsub.{method}", "param": sub["param"]}))
+                        self.subscriptions.remove(sub)
+            else:  
+                for sub in self.subscriptions.copy():
+                    if _cond_with_param(sub,param):
+                        self._pop_callback(method)
+                        await self.ws.send(json.dumps({"method": f"unsub.{method}", "param": param}))
+                        self.subscriptions.remove(sub)
 
             logger.debug(f"Unsubscribed from {method}")
         else:
