@@ -1504,7 +1504,7 @@ class WebSocket(_FuturesWebSocket):
             loop=loop,
         )
 
-    async def unsubscribe(self, method: str | Callable):
+    async def unsubscribe(self, method: str | Callable, param: Optional[dict] = None):
         personal_filters = ["personal.filter", "filter", "personal"]
         if (
             method in personal_filters
@@ -1513,7 +1513,7 @@ class WebSocket(_FuturesWebSocket):
         ):
             return await self.personal_stream(lambda: ...)
 
-        return await super().unsubscribe(method)
+        return await super().unsubscribe(method,param)
 
     async def tickers_stream(self, callback: Awaitable[Callable[..., None]]):
         """
