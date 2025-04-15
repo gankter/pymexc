@@ -128,6 +128,7 @@ class _WebSocketManager:
 
         self.last_subsctiption: Union[str, None] = None
         self.loop = loop or asyncio.get_event_loop()
+        self.locker = asyncio.Lock()
 
         if ping_timeout:
             warnings.warn(
@@ -160,7 +161,8 @@ class _WebSocketManager:
     async def _loop_recv(self):
         while self.is_connected():
             try:
-                msg = await self.ws.recv()
+                async with self.locker:
+                    msg = await self.ws.recv()
                 await self._on_message(msg)
             except Exception as e:
                 await self._on_error(e)
