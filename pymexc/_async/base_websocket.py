@@ -176,7 +176,7 @@ class _WebSocketManager:
             print("pong", message)
             return
         else:
-            if asyncio.iscoroutine(self.callback):
+            if asyncio.iscoroutinefunction(self.callback):
                 await self.callback(message)
             else:
                 self.callback(message)
@@ -398,7 +398,7 @@ class _WebSocketManager:
             )
             return
         
-        if asyncio.iscoroutine(callback_function):
+        if asyncio.iscoroutinefunction(callback_function):
             await callback_function(callback_data)
         else:
             callback_function(callback_data)
