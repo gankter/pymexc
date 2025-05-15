@@ -460,16 +460,17 @@ class _FuturesWebSocketManager(_WebSocketManager):
             return sub["method"] == f"sub.{method}"
         
         if isinstance(method, str):
+            need_remove_callback = len(self.subscriptions) == 1
             if param is None:
                 for sub in self.subscriptions.copy():
                     if _cond_no_param(sub):
-                        self._pop_callback(method)
+                        if need_remove_callback: self._pop_callback(method)  
                         await self.ws.send(json.dumps({"method": f"unsub.{method}", "param": sub["param"]}))
                         self.subscriptions.remove(sub)
             else:  
                 for sub in self.subscriptions.copy():
                     if _cond_with_param(sub,param):
-                        self._pop_callback(method)
+                        if need_remove_callback: self._pop_callback(method)
                         await self.ws.send(json.dumps({"method": f"unsub.{method}", "param": param}))
                         self.subscriptions.remove(sub)
             logger.debug(f"Unsubscribed from {method}")
