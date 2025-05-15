@@ -176,7 +176,10 @@ class _WebSocketManager:
             print("pong", message)
             return
         else:
-            await self.callback(message)
+            if asyncio.iscoroutinefunction(self.callback):
+                await self.callback(message)
+            else:
+                self.callback(message)
 
     def is_connected(self):
         try:
@@ -389,12 +392,18 @@ class _WebSocketManager:
         topic = self._topic(message.get("channel") or message.get("c"))
         callback_data = message
         callback_function = self._get_callback(topic)
-        if callback_function:
-            await callback_function(callback_data)
-        else:
+        if not callback_function:
             logger.warning(
                 f"Callback for topic {topic} not found. | Message: {message}"
             )
+            return
+        
+        if asyncio.iscoroutinefunction(callback_function):
+            await callback_function(callback_data)
+        else:
+            callback_function(callback_data)
+        
+            
 
     async def _process_subscription_message(self, message: dict):
         if message.get("id") == 0 and message.get("code") == 0:
