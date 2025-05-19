@@ -171,7 +171,7 @@ class _WebSocketManager:
         """
         Parse incoming messages.
         """
-        message = json.loads(message)
+        message = json.loads(message,parse_float=str)
         if self._is_custom_pong(message):
             print("pong", message)
             return
