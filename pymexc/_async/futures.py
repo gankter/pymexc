@@ -1503,7 +1503,10 @@ class WebSocket(_FuturesWebSocket):
             http_proxy_timeout=http_proxy_timeout,
             loop=loop,
         )
-
+        
+    async def disconnect(self):
+        return await super().disconnect()
+    
     async def unsubscribe(self, method: str | Callable, param: Optional[dict] = None):
         personal_filters = ["personal.filter", "filter", "personal"]
         if (
