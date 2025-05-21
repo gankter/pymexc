@@ -1504,8 +1504,8 @@ class WebSocket(_FuturesWebSocket):
             loop=loop,
         )
         
-    async def disconnect(self):
-        return await super().disconnect()
+    def disconnect(self):
+        return super().disconnect()
     
     async def unsubscribe(self, method: str | Callable, param: Optional[dict] = None):
         personal_filters = ["personal.filter", "filter", "personal"]
