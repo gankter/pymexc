@@ -47,6 +47,9 @@ class CustomWebsockerClientProtocol(websockets.client.WebSocketClientProtocol):
         super().connection_open()
         #
         self.loop.create_task(self.ws_manager._on_open())
+        
+    def close_connection(self):
+        super().close_connection()
 
     def connection_closed_exc(self) -> Exception:
         self.loop.create_task(self.ws_manager._on_close())
@@ -159,7 +162,7 @@ class _WebSocketManager:
         logger.debug(f"WebSocket {self.ws_name} opened.")
 
     async def _loop_recv(self):
-        while self.is_connected():
+        while self.is_connected() and not self.exited:
             try:
                 async with self.locker:
                     msg = await self.ws.recv()
@@ -173,7 +176,7 @@ class _WebSocketManager:
         """
         Parse incoming messages.
         """
-        message = json.loads(message,parse_float=str)
+        message = json.loads(message)
         if self._is_custom_pong(message):
             print("pong", message)
             return
@@ -235,7 +238,7 @@ class _WebSocketManager:
 
             # parse incoming messages
             self.loop.create_task(self._loop_recv())
-
+            
             # Setup the thread running WebSocketApp.
             # self.wst = threading.Thread(
             #     target=lambda: self.ws.run_forever(
@@ -368,6 +371,7 @@ class _WebSocketManager:
         Closes the websocket connection.
         """
         self.exited = True
+        self.ws.close_connection()
 
     def _check_callback_directory(self, topics):
         for topic in topics:
