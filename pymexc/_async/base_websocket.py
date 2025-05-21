@@ -559,6 +559,10 @@ class _FuturesWebSocket(_FuturesWebSocketManager):
             subscribe_callback=subscribe_callback,
             **kwargs,
         )
+    async def disconnect(self):
+        if self.is_connected():
+            self.exit()
+        asyncio.sleep(1)
 
     async def connect(self):
         if not self.is_connected():
