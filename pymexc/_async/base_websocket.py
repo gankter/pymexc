@@ -164,6 +164,8 @@ class _WebSocketManager:
                 async with self.locker:
                     msg = await self.ws.recv()
                 await self._on_message(msg)
+            except asyncio.CancelledError:
+                break
             except Exception as e:
                 await self._on_error(e)
 
