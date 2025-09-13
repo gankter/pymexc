@@ -27,9 +27,7 @@ class MexcSDK(ABC):
     :param base_url: A string representing the base URL of the API.
     """
 
-    def __init__(
-        self, api_key: str, api_secret: str, base_url: str, proxies: dict = None
-    ):
+    def __init__(self, api_key: str, api_secret: str, base_url: str, proxies: dict = None):
         self.api_key = api_key
         self.api_secret = api_secret
 
@@ -53,9 +51,7 @@ class MexcSDK(ABC):
     @classmethod
     async def call(
         self,
-        method: Union[
-            Literal["GET"], Literal["POST"], Literal["PUT"], Literal["DELETE"]
-        ],
+        method: Union[Literal["GET"], Literal["POST"], Literal["PUT"], Literal["DELETE"]],
         router: str,
         *args,
         **kwargs,
@@ -63,9 +59,7 @@ class MexcSDK(ABC):
 
 
 class _SpotHTTP(MexcSDK):
-    def __init__(
-        self, api_key: str = None, api_secret: str = None, proxies: dict = None
-    ):
+    def __init__(self, api_key: str = None, api_secret: str = None, proxies: dict = None):
         super().__init__(api_key, api_secret, SPOT, proxies=proxies)
 
         self.session.headers.update({"X-MEXC-APIKEY": self.api_key})
@@ -90,9 +84,7 @@ class _SpotHTTP(MexcSDK):
 
     async def call(
         self,
-        method: Union[
-            Literal["GET"], Literal["POST"], Literal["PUT"], Literal["DELETE"]
-        ],
+        method: Union[Literal["GET"], Literal["POST"], Literal["PUT"], Literal["DELETE"]],
         router: str,
         auth: bool = True,
         *args,
@@ -105,9 +97,7 @@ class _SpotHTTP(MexcSDK):
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
         if kwargs.get("params"):
-            kwargs["params"] = {
-                k: v for k, v in kwargs["params"].items() if v is not None
-            }
+            kwargs["params"] = {k: v for k, v in kwargs["params"].items() if v is not None}
         else:
             kwargs["params"] = {}
 
@@ -122,14 +112,11 @@ class _SpotHTTP(MexcSDK):
         if self.api_key and self.api_secret and auth:
             params["signature"] = self.sign(encoded_params)
 
-        response = await self.session.request(
-            method, f"{self.base_url}{router}", params=params, *args, **kwargs
-        )
+        response = await self.session.request(method, f"{self.base_url}{router}", params=params, *args, **kwargs)
 
         if not response.ok:
-            raise MexcAPIError(
-                f"(code={response.json()['code']}): {response.json()['msg']}"
-            )
+            print(response.json())
+            raise MexcAPIError(f"(code={response.json()['code']}): {response.json()['msg']}")
 
         return response.json()
 
@@ -149,7 +136,10 @@ class _FuturesHTTP(MexcSDK):
             )
 
         self.session.headers.update(
-            {"Content-Type": "application/json", "ApiKey": self.api_key}
+            {
+                "Content-Type": "application/json",
+                "ApiKey": self.api_key,
+            }
         )
 
     def sign(self, timestamp: str, **kwargs) -> str:
@@ -176,9 +166,7 @@ class _FuturesHTTP(MexcSDK):
 
     async def call(
         self,
-        method: Union[
-            Literal["GET"], Literal["POST"], Literal["PUT"], Literal["DELETE"]
-        ],
+        method: Union[Literal["GET"], Literal["POST"], Literal["PUT"], Literal["DELETE"]],
         router: str,
         *args,
         **kwargs,
@@ -212,15 +200,10 @@ class _FuturesHTTP(MexcSDK):
         for variant in ("params", "json"):
             if kwarg_variant := kwargs.get(variant):
                 if isinstance(kwarg_variant, dict):
-                    kwargs[variant] = {
-                        k: v for k, v in kwarg_variant.items() if v is not None
-                    }
+                    kwargs[variant] = {k: v for k, v in kwarg_variant.items() if v is not None}
                 # ! func cancel_order may be list
                 elif isinstance(kwarg_variant, list):
-                    kwargs[variant] = [
-                        v for v in kwarg_variant if v is not None
-                    ]
-
+                    kwargs[variant] = [v for v in kwarg_variant if v is not None]
 
         if self.api_key and self.api_secret:
             # Add signature
@@ -232,8 +215,6 @@ class _FuturesHTTP(MexcSDK):
                 "Signature": self.sign(timestamp, **payload),
             }
 
-        response = await self.session.request(
-            method, f"{self.base_url}{router}", *args, **kwargs
-        )
+        response = await self.session.request(method, f"{self.base_url}{router}", *args, **kwargs)
 
         return response.json()

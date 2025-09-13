@@ -7,9 +7,11 @@ from typing import Callable, Dict, List, Union,Optional
 
 import websocket
 
+from pymexc.proto import ProtoTyping, PublicSpotKlineV3Api, PushDataV3ApiWrapper
+
 logger = logging.getLogger(__name__)
 
-SPOT = "wss://wbs.mexc.com/ws"
+SPOT = "wss://wbs-api.mexc.com/ws"
 FUTURES = "wss://contract.mexc.com/edge"
 FUTURES_PERSONAL_TOPICS = [
     "order",
@@ -26,6 +28,8 @@ FUTURES_PERSONAL_TOPICS = [
 
 
 class _WebSocketManager:
+    endpoint: str
+
     def __init__(
         self,
         callback_function,
@@ -44,6 +48,8 @@ class _WebSocketManager:
         http_no_proxy=None,
         http_proxy_auth=None,
         http_proxy_timeout=None,
+        proto=False,
+        extend_proto_body=False,
     ):
         # Set API keys.
         self.api_key: Union[str, None] = api_key
@@ -52,7 +58,7 @@ class _WebSocketManager:
         # Subscribe to private futures topics if proided
         self.subscribe_callback: Union[Callable, None] = subscribe_callback
 
-        self.callback: Callable = callback_function
+        self.callback: Callable[[dict | ProtoTyping.PushDataV3ApiWrapper], None] = callback_function
         self.ws_name: str = ws_name
         if api_key:
             self.ws_name += " (Auth)"
@@ -67,6 +73,10 @@ class _WebSocketManager:
 
         # Delta time for private auth expiration in seconds
         self.private_auth_expire = private_auth_expire
+
+        # Use new protocol
+        self.proto = proto
+        self.extend_proto_body = extend_proto_body
 
         # Setup the callback directory following the format:
         #   {
@@ -112,6 +122,7 @@ class _WebSocketManager:
             .replace("push.", "")
             .replace("rs.sub.", "")
             .replace("spot@", "")
+            .replace(".pb", "")
             .split(".v3.api")[0]
         )
 
@@ -121,15 +132,25 @@ class _WebSocketManager:
         """
         logger.debug(f"WebSocket {self.ws_name} opened.")
 
-    def _on_message(self, message):
+    def _on_message(self, message: str | bytes, parse_only: bool = False):
         """
         Parse incoming messages.
         """
-        message = json.loads(message)
-        if self._is_custom_pong(message):
-            return
+        if isinstance(message, str):
+            _message = json.loads(message)
+
+        elif isinstance(message, bytes):
+            # Deserialize message
+            _message = PushDataV3ApiWrapper()
+            _message.ParseFromString(message)
+
         else:
-            self.callback(message)
+            raise ValueError(f"Unserializable message type: {type(message)} | {message}")
+
+        if parse_only:
+            return _message
+
+        self.callback(_message)
 
     def is_connected(self):
         try:
@@ -215,14 +236,12 @@ class _WebSocketManager:
 
         self.attempting_connection = False
 
-    def _set_personal_callback(
-        self, callback: Callable = None, topics: List[str] = FUTURES_PERSONAL_TOPICS
-    ):
+    def _set_personal_callback(self, callback: Callable = None, topics: List[str] = FUTURES_PERSONAL_TOPICS):
         if callback:
             for topic in topics:
                 self._set_callback(f"personal.{topic}", callback)
 
-    def _auth(self):
+    def _auth(self, parse_only: bool = False):
         # Generate signature
 
         # make auth if futures. spot has a different auth system.
@@ -240,23 +259,25 @@ class _WebSocketManager:
             ).hexdigest()
         )
 
-        # Authenticate with API.
-        self.ws.send(
-            json.dumps(
-                {
-                    "subscribe": bool(self.subscribe_callback),
-                    "method": "login",
-                    "param": {
-                        "apiKey": self.api_key,
-                        "reqTime": timestamp,
-                        "signature": signature,
-                    },
-                }
-            )
-        )
         self._set_personal_callback(self.subscribe_callback, FUTURES_PERSONAL_TOPICS)
 
-    def _on_error(self, error):
+        msg = {
+            "subscribe": bool(self.subscribe_callback),
+            "method": "login",
+            "param": {
+                "apiKey": self.api_key,
+                "reqTime": timestamp,
+                "signature": signature,
+            },
+        }
+
+        if parse_only:
+            return msg
+
+        # Authenticate with API.
+        self.ws.send(json.dumps(msg))
+
+    def _on_error(self, error: Exception, parse_only: bool = False):
         """
         Exit on errors and raise exception, or attempt reconnect.
         """
@@ -270,11 +291,11 @@ class _WebSocketManager:
             raise error
 
         if not self.exited:
-            logger.error(
-                f"WebSocket {self.ws_name} ({self.endpoint}) "
-                f"encountered error: {error}."
-            )
+            logger.error(f"WebSocket {self.ws_name} ({self.endpoint}) encountered error: {error}.")
             self.exit()
+
+        if parse_only:
+            return
 
         # Reconnect.
         if self.restart_on_error and not self.attempting_connection:
@@ -356,30 +377,57 @@ class _WebSocketManager:
         return self.callback_directory.get(topic)
 
     def _pop_callback(self, topic: str) -> Union[Callable[..., None], None]:
-        return (
-            self.callback_directory.pop(topic)
-            if self.callback_directory.get(topic)
-            else None
-        )
-    
-    def _process_normal_message(self, message: dict):
+        return self.callback_directory.pop(topic) if self.callback_directory.get(topic) else None
+
+    def get_proto_body(self, message: ProtoTyping.PushDataV3ApiWrapper) -> dict:
+        if self.extend_proto_body:
+            return message
+
+        topic = self._topic(message.channel)
+        bodies = {
+            "public.kline": "publicSpotKline",
+            "public.deals": "publicDeals",
+            "public.increase.depth": "publicIncreaseDepths",
+            "public.limit.depth": "publicLimitDepths",
+            "public.bookTicker": "publicBookTicker",
+            "private.account": "privateAccount",
+            "private.deals": "privateDeals",
+            "private.orders": "privateOrders",
+        }
+
+        if topic in bodies:
+            return getattr(message, bodies[topic])  # default=message
+
+        else:
+            logger.warning(f"Body for topic {topic} not found. | Message: {message.__dict__}")
+            return message
+
+    def _process_normal_message(self, message: dict | ProtoTyping.PushDataV3ApiWrapper, parse_only: bool = False):
         """
         Redirect message to callback function
         """
-        topic = self._topic(message.get("channel") or message.get("c"))
-        callback_data = message
-        callback_function = self._get_callback(topic)
-        if callback_function:
-            callback_function(callback_data)
+        if isinstance(message, dict):
+            topic = self._topic(message.get("channel") or message.get("c"))
+            callback_data = message
         else:
-            logger.warning(
-                f"Callback for topic {topic} not found. | Message: {message}"
-            )
+            topic = self._topic(message.channel)
+            callback_data = self.get_proto_body(message)
+
+        callback_function = self._get_callback(topic)
+        if not callback_function:
+            logger.warning(f"Callback for topic {topic} not found. | Message: {message}")
+            return None, None
+        else:
+            if parse_only:
+                return callback_function, callback_data
+
+            callback_function(callback_data)
 
     def _process_subscription_message(self, message: dict):
         if message.get("id") == 0 and message.get("code") == 0:
             # If we get successful SPOT subscription, notify user
             logger.debug(f"Subscription to {message['msg']} successful.")
+            return
 
         elif (
             message.get("channel", "").startswith("rs.sub")
@@ -388,6 +436,7 @@ class _WebSocketManager:
         ):
             # If we get successful FUTURES subscription, notify user
             logger.debug(f"Subscription to {message['channel']} successful.")
+            return
 
         else:
             # SPOT or FUTURES subscription fail
@@ -408,9 +457,7 @@ class _WebSocketManager:
 class _FuturesWebSocketManager(_WebSocketManager):
     def __init__(self, ws_name, **kwargs):
         callback_function = (
-            kwargs.pop("callback_function")
-            if kwargs.get("callback_function")
-            else self._handle_incoming_message
+            kwargs.pop("callback_function") if kwargs.get("callback_function") else self._handle_incoming_message
         )
 
         super().__init__(callback_function, ws_name, **kwargs)
@@ -473,20 +520,14 @@ class _FuturesWebSocketManager(_WebSocketManager):
 
         # If we get unsuccessful auth, notify user.
         elif message.get("data") != "success":  # !!!!
-            logger.debug(
-                f"Authorization for {self.ws_name} failed. Please "
-                f"check your API keys and restart."
-            )
+            logger.debug(f"Authorization for {self.ws_name} failed. Please check your API keys and restart.")
 
     def _handle_incoming_message(self, message):
         def is_auth_message():
             return message.get("channel", "") == "rs.login"
 
         def is_subscription_message():
-            return (
-                message.get("channel", "").startswith("rs.sub")
-                or message.get("channel", "") == "rs.personal.filter"
-            )
+            return message.get("channel", "").startswith("rs.sub") or message.get("channel", "") == "rs.personal.filter"
 
         def is_pong_message():
             return message.get("channel", "") in ("pong", "clientId")
@@ -535,19 +576,21 @@ class _FuturesWebSocket(_FuturesWebSocketManager):
 class _SpotWebSocketManager(_WebSocketManager):
     def __init__(self, ws_name, **kwargs):
         callback_function = (
-            kwargs.pop("callback_function")
-            if kwargs.get("callback_function")
-            else self._handle_incoming_message
+            kwargs.pop("callback_function") if kwargs.get("callback_function") else self._handle_incoming_message
         )
         super().__init__(callback_function, ws_name, **kwargs)
 
         self.private_topics = ["account", "deals", "orders"]
 
-    def subscribe(self, topic: str, callback: Callable, params_list: list):
+    def subscribe(self, topic: str, callback: Callable, params_list: list, interval: str = None):
         subscription_args = {
             "method": "SUBSCRIPTION",
             "params": [
-                "@".join([f"spot@{topic}.v3.api"] + list(map(str, params.values())))
+                "@".join(
+                    [f"spot@{topic}.v3.api" + (".pb" if self.proto else "")] 
+                    + ([str(interval)] if interval else [])
+                    + list(map(str, params.values()))
+                )
                 for params in params_list
             ],
         }
@@ -582,16 +625,14 @@ class _SpotWebSocketManager(_WebSocketManager):
                 json.dumps(
                     {
                         "method": "UNSUBSCRIPTION",
-                        "params": ["@".join([f"spot@{t}.v3.api"]) for t in topics],
+                        "params": ["@".join([f"spot@{t}.v3.api" + (".pb" if self.proto else "")]) for t in topics],
                     }
                 )
             )
 
             # remove subscriptions from list
             for i, sub in enumerate(self.subscriptions):
-                new_params = [
-                    x for x in sub["params"] for _topic in topics if _topic not in x
-                ]
+                new_params = [x for x in sub["params"] for _topic in topics if _topic not in x]
                 if new_params:
                     self.subscriptions[i]["params"] = new_params
                 else:
@@ -602,26 +643,20 @@ class _SpotWebSocketManager(_WebSocketManager):
         else:
             # some funcs in list
             topics = [
-                x.__name__.replace("_stream", "").replace("_", ".")
-                if getattr(x, "__name__", None)
-                else x
+                x.__name__.replace("_stream", "").replace("_", ".") if getattr(x, "__name__", None) else x
                 #
                 for x in topics
             ]
             return self.unsubscribe(*topics)
 
-    def _handle_incoming_message(self, message):
+    def _handle_incoming_message(self, message: dict):
         def is_subscription_message():
-            if (
-                message.get("id") == 0
-                and message.get("code") == 0
-                and message.get("msg")
-            ):
+            if message.get("id") == 0 and message.get("code") == 0:
                 return True
             else:
                 return False
 
-        if is_subscription_message():
+        if isinstance(message, dict) and is_subscription_message():
             self._process_subscription_message(message)
         else:
             self._process_normal_message(message)
@@ -631,13 +666,14 @@ class _SpotWebSocketManager(_WebSocketManager):
 
 
 class _SpotWebSocket(_SpotWebSocketManager):
-    def __init__(self, endpoint: str = "wss://wbs.mexc.com/ws", **kwargs):
+    def __init__(self, endpoint: str = SPOT, **kwargs):
         self.ws_name = "SpotV3"
         self.endpoint = endpoint
 
         super().__init__(self.ws_name, **kwargs)
 
-    def _ws_subscribe(self, topic, callback, params: list = []):
+    def _ws_subscribe(self, topic, callback, params: list = [], interval: str = None):
         if not self.is_connected():
             self._connect(self.endpoint)
-        self.subscribe(topic, callback, params)
+
+        self.subscribe(topic, callback, params, interval)

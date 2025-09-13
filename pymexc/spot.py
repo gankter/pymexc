@@ -35,7 +35,10 @@ while True:
 import logging
 import threading
 import time
+from tkinter import N
 from typing import Callable, List, Literal, Optional, Union
+import warnings
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +47,13 @@ try:
     from _async.spot import WebSocket as AsyncWebSocket
     from base import _SpotHTTP
     from base_websocket import _SpotWebSocket
+    from proto import ProtoTyping
 except ImportError:
     from ._async.spot import HTTP as AsyncHTTP
     from ._async.spot import WebSocket as AsyncWebSocket
     from .base import _SpotHTTP
     from .base_websocket import _SpotWebSocket
+    from .proto import ProtoTyping
 
 __all__ = ["HTTP", "WebSocket", "AsyncHTTP", "AsyncWebSocket"]
 
@@ -90,9 +95,7 @@ class HTTP(_SpotHTTP):
         """
         return self.call("GET", "/api/v3/defaultSymbols", auth=False)
 
-    def exchange_info(
-        self, symbol: Optional[str] = None, symbols: Optional[List[str]] = None
-    ) -> dict:
+    def exchange_info(self, symbol: Optional[str] = None, symbols: Optional[List[str]] = None) -> dict:
         """
         ### Exchange Information
 
@@ -133,11 +136,9 @@ class HTTP(_SpotHTTP):
         :return: The order book data in JSON format.
         :rtype: dict
         """
-        return self.call(
-            "GET", "/api/v3/depth", params=dict(symbol=symbol, limit=limit), auth=False
-        )
+        return self.call("GET", "/api/v3/depth", params=dict(symbol=symbol, limit=limit), auth=False)
 
-    def trades(self, symbol: str, limit: Optional[int] = 500) -> dict:
+    def trades(self, symbol: str, limit: Optional[int] = 500) -> list:
         """
         ### Recent Trades List
 
@@ -154,9 +155,7 @@ class HTTP(_SpotHTTP):
         :rtype: dict
         """
 
-        return self.call(
-            "GET", "/api/v3/trades", params=dict(symbol=symbol, limit=limit), auth=False
-        )
+        return self.call("GET", "/api/v3/trades", params=dict(symbol=symbol, limit=limit), auth=False)
 
     def agg_trades(
         self,
@@ -164,7 +163,7 @@ class HTTP(_SpotHTTP):
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         limit: Optional[int] = 500,
-    ) -> dict:
+    ) -> list:
         """
         ### Compressed/Aggregate Trades List
 
@@ -191,9 +190,7 @@ class HTTP(_SpotHTTP):
         return self.call(
             "GET",
             "/api/v3/aggTrades",
-            params=dict(
-                symbol=symbol, startTime=start_time, endTime=end_time, limit=limit
-            ),
+            params=dict(symbol=symbol, startTime=start_time, endTime=end_time, limit=limit),
             auth=False,
         )
 
@@ -204,7 +201,7 @@ class HTTP(_SpotHTTP):
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         limit: Optional[int] = 500,
-    ) -> dict:
+    ) -> list:
         """
         ### Kline/Candlestick Data
 
@@ -238,7 +235,7 @@ class HTTP(_SpotHTTP):
                 endTime=end_time,
                 limit=limit,
             ),
-            auth=False,
+            auth=True,
         )
 
     def avg_price(self, symbol: str):
@@ -255,9 +252,7 @@ class HTTP(_SpotHTTP):
         :return: A dictionary containing average price.
         :rtype: dict
         """
-        return self.call(
-            "GET", "/api/v3/avgPrice", params=dict(symbol=symbol), auth=False
-        )
+        return self.call("GET", "/api/v3/avgPrice", params=dict(symbol=symbol), auth=True)
 
     def ticker_24h(self, symbol: Optional[str] = None):
         """
@@ -274,9 +269,7 @@ class HTTP(_SpotHTTP):
         :return: A dictionary.
         :rtype: dict
         """
-        return self.call(
-            "GET", "/api/v3/ticker/24hr", params=dict(symbol=symbol), auth=False
-        )
+        return self.call("GET", "/api/v3/ticker/24hr", params=dict(symbol=symbol), auth=False)
 
     def ticker_price(self, symbol: Optional[str] = None):
         """
@@ -293,9 +286,7 @@ class HTTP(_SpotHTTP):
         :return: A dictionary.
         :rtype: dict
         """
-        return self.call(
-            "GET", "/api/v3/ticker/price", params=dict(symbol=symbol), auth=False
-        )
+        return self.call("GET", "/api/v3/ticker/price", params=dict(symbol=symbol), auth=False)
 
     def ticker_book_price(self, symbol: Optional[str] = None):
         """
@@ -313,9 +304,7 @@ class HTTP(_SpotHTTP):
         :return: A dictionary.
         :rtype: dict
         """
-        return self.call(
-            "GET", "/api/v3/ticker/bookTicker", params=dict(symbol=symbol), auth=False
-        )
+        return self.call("GET", "/api/v3/ticker/bookTicker", params=dict(symbol=symbol), auth=False)
 
     # <=================================================================>
     #
@@ -376,9 +365,7 @@ class HTTP(_SpotHTTP):
         return self.call(
             "GET",
             "api/v3/sub-account/list",
-            params=dict(
-                subAccount=sub_account, isFreeze=is_freeze, page=page, limit=limit
-            ),
+            params=dict(subAccount=sub_account, isFreeze=is_freeze, page=page, limit=limit),
         )
 
     def create_sub_account_api_key(
@@ -430,9 +417,7 @@ class HTTP(_SpotHTTP):
             params=dict(
                 subAccount=sub_account,
                 note=note,
-                permissions=",".join(permissions)
-                if isinstance(permissions, list)
-                else permissions,
+                permissions=",".join(permissions) if isinstance(permissions, list) else permissions,
                 ip=ip,
             ),
         )
@@ -453,9 +438,7 @@ class HTTP(_SpotHTTP):
         :return: response dictionary
         :rtype: dict
         """
-        return self.call(
-            "GET", "api/v3/sub-account/apiKey", params=dict(subAccount=sub_account)
-        )
+        return self.call("GET", "api/v3/sub-account/apiKey", params=dict(subAccount=sub_account))
 
     def delete_sub_account_api_key(self, sub_account: str, api_key: str) -> dict:
         """
@@ -580,11 +563,55 @@ class HTTP(_SpotHTTP):
             ),
         )
 
+    def sub_account_asset(
+        self,
+        sub_account: str,
+        account_type: Literal["SPOT", "FUTURES"],
+    ) -> dict:
+        """
+        ### Query Sub-account Asset
+        #### Required permission: SPOT_TRANSFER_READ
+
+        Weight(IP): 1
+
+        https://mexcdevelop.github.io/apidocs/spot_v3_en/#query-sub-account-asset
+
+        :param sub_account: subAccount
+        :type sub_account: str
+        :param account_type: accountType:"SPOT","FUTURES"
+        :type account_type: str
+
+        :return: response dictionary
+        :rtype: dict
+        """
+        return self.call(
+            "GET",
+            "api/v3/sub-account/asset",
+            params=dict(
+                subAccount=sub_account,
+                accountType=account_type,
+            ),
+        )
+
     # <=================================================================>
     #
     #                       Spot Account/Trade
     #
     # <=================================================================>
+
+    def get_kyc_status(self) -> dict:
+        """
+        ### Query KYC status
+        #### Required permission: SPOT_ACCOUNT_READ
+
+        Weight(IP): 1
+
+        https://mexcdevelop.github.io/apidocs/spot_v3_en/#query-kyc-status
+
+        :return: response dictionary
+        :rtype: dict
+        """
+        return self.call("GET", "api/v3/kyc/status")
 
     def get_default_symbols(self) -> dict:
         """
@@ -600,7 +627,11 @@ class HTTP(_SpotHTTP):
         """
         return self.call("GET", "api/v3/selfSymbols")
 
-    def test_new_order(
+    def test_new_order(self, *args, **kwargs) -> dict:
+        warnings.warn("test_new_order is deprecated, use test_order instead", DeprecationWarning)
+        return self.test_order(*args, **kwargs)
+
+    def test_order(
         self,
         symbol: str,
         side: str,
@@ -614,37 +645,45 @@ class HTTP(_SpotHTTP):
         time_in_force: Optional[str] = None,
     ) -> dict:
         """
-        ### New Order.
+        ### Test New Order.
         #### Required permission: SPOT_DEAL_WRITE
 
         Weight(IP): 1, Weight(UID): 1
 
-        https://mexcdevelop.github.io/apidocs/spot_v3_en/#new-order
+        https://mexcdevelop.github.io/apidocs/spot_v3_en/#test-new-order
 
-        :param symbol:
+        :param symbol: Trading pair
         :type symbol: str
-        :param side: ENUM:Order Side
+        :param side: Order side (BUY/SELL)
         :type side: str
-        :param order_type: ENUM:Order Type
+        :param order_type: Order type (LIMIT/MARKET)
         :type order_type: str
-        :param quantity: (optional) Quantity
-        :type quantity: int
-        :param quote_order_qty: (optional) Quote order quantity
-        :type quote_order_qty: int
-        :param price: (optional) Price
-        :type price: int
-        :param new_client_order_id: (optional) Unique order id
-        :type new_client_order_id: str
-        :param stop_price: (optional) Stop price
-        :type stop_price: int
-        :param iceberg_qty: (optional) Iceberg quantity
-        :type iceberg_qty: int
-        :param time_in_force: (optional) ENUM:Time In Force
-        :type time_in_force: str
+        :param quantity: Order quantity
+        :type quantity: Optional[int]
+        :param quote_order_qty: Quote order quantity
+        :type quote_order_qty: Optional[int]
+        :param price: Order price
+        :type price: Optional[int]
+        :param new_client_order_id: Client order ID
+        :type new_client_order_id: Optional[str]
+        :param stop_price: Stop price
+        :type stop_price: Optional[int]
+        :param iceberg_qty: Iceberg quantity
+        :type iceberg_qty: Optional[int]
+        :param time_in_force: Time in force
+        :type time_in_force: Optional[str]
 
-        :return: response dictionary
+        :return: Empty dict if successful
         :rtype: dict
         """
+        # Validate required parameters based on order type
+        if order_type == "LIMIT":
+            if not quantity or not price:
+                raise ValueError("LIMIT orders require both quantity and price")
+        elif order_type == "MARKET":
+            if not quantity and not quote_order_qty:
+                raise ValueError("MARKET orders require either quantity or quoteOrderQty")
+
         return self.call(
             "POST",
             "/api/v3/order/test",
@@ -662,7 +701,11 @@ class HTTP(_SpotHTTP):
             ),
         )
 
-    def new_order(
+    def new_order(self, *args, **kwargs) -> dict:
+        warnings.warn("new_order is deprecated, use order instead", DeprecationWarning)
+        return self.order(*args, **kwargs)
+
+    def order(
         self,
         symbol: str,
         side: str,
@@ -683,30 +726,38 @@ class HTTP(_SpotHTTP):
 
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#new-order
 
-        :param symbol:
+        :param symbol: Trading pair
         :type symbol: str
-        :param side: ENUM:Order Side
+        :param side: Order side (BUY/SELL)
         :type side: str
-        :param order_type: ENUM:Order Type
+        :param order_type: Order type (LIMIT/MARKET)
         :type order_type: str
-        :param quantity: (optional) Quantity
-        :type quantity: int
-        :param quote_order_qty: (optional) Quote order quantity
-        :type quote_order_qty: int
-        :param price: (optional) Price
-        :type price: int
-        :param new_client_order_id: (optional) Unique order id
-        :type new_client_order_id: str
-        :param stop_price: (optional) Stop price
-        :type stop_price: int
-        :param iceberg_qty: (optional) Iceberg quantity
-        :type iceberg_qty: int
-        :param time_in_force: (optional) ENUM:Time In Force
-        :type time_in_force: str
+        :param quantity: Order quantity
+        :type quantity: Optional[int]
+        :param quote_order_qty: Quote order quantity
+        :type quote_order_qty: Optional[int]
+        :param price: Order price
+        :type price: Optional[int]
+        :param new_client_order_id: Client order ID
+        :type new_client_order_id: Optional[str]
+        :param stop_price: Stop price
+        :type stop_price: Optional[int]
+        :param iceberg_qty: Iceberg quantity
+        :type iceberg_qty: Optional[int]
+        :param time_in_force: Time in force
+        :type time_in_force: Optional[str]
 
-        :return: response dictionary
+        :return: Order response dictionary
         :rtype: dict
         """
+        # Validate required parameters based on order type
+        if order_type == "LIMIT":
+            if not quantity or not price:
+                raise ValueError("LIMIT orders require both quantity and price")
+        elif order_type == "MARKET":
+            if not quantity and not quote_order_qty:
+                raise ValueError("MARKET orders require either quantity or quoteOrderQty")
+
         return self.call(
             "POST",
             "api/v3/order",
@@ -726,62 +777,76 @@ class HTTP(_SpotHTTP):
 
     def batch_orders(
         self,
-        batch_orders: List[str],
+        batch_orders: List[dict],
         symbol: str,
         side: Literal["BUY", "SELL"],
-        order_type: Literal[
-            "LIMIT", "MARKET", "LIMIT_MARKET", "IMMEDIATE_OR_CANCEL", "FILL_OR_KILL"
-        ],
-        quantity: Optional[int] = None,
-        quote_order_qty: Optional[int] = None,
-        price: Optional[int] = None,
+        order_type: Literal["LIMIT", "MARKET", "LIMIT_MARKET", "IMMEDIATE_OR_CANCEL", "FILL_OR_KILL"],
+        quantity: Optional[float] = None,
+        quote_order_qty: Optional[float] = None,
+        price: Optional[float] = None,
         new_client_order_id: Optional[str] = None,
-    ) -> dict:
+    ) -> list:
         """
-        ### Batch Orders
-        #### Supports 20 orders with a same symbol in a batch,rate limit:2 times/s.
+        ### Batch Orders.
         #### Required permission: SPOT_DEAL_WRITE
 
-        Weight(IP): 1,Weight(UID): 1
+        Weight(IP): 1, Weight(UID): 1
+
+        Supports 20 orders with a same symbol in a batch, rate limit: 2 times/s.
 
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#batch-orders
 
-
-        :param batch_orders: list of batchOrders,supports max 20 orders
+        :param batch_orders: list of batchOrders, supports max 20 orders
         :type batch_orders: List[dict]
         :param symbol: symbol
         :type symbol: str
         :param side: order side
-        :type side: str
+        :type side: Literal["BUY", "SELL"]
         :param order_type: order type
-        :type order_type: str
-        :param quantity: (optional) quantity
-        :type quantity: int
-        :param quote_order_qty: (optional) quoteOrderQty
-        :type quote_order_qty: int
-        :param price: (optional) order price
-        :type price: int
-        :param new_client_order_id: (optional) ClientOrderId
-        :type new_client_order_id: str
+        :type order_type: Literal["LIMIT", "MARKET", "LIMIT_MARKET", "IMMEDIATE_OR_CANCEL", "FILL_OR_KILL"]
+        :param quantity: quantity (required for LIMIT and MARKET orders)
+        :type quantity: Optional[float]
+        :param quote_order_qty: quoteOrderQty (required for MARKET orders if quantity not provided)
+        :type quote_order_qty: Optional[float]
+        :param price: order price (required for LIMIT orders)
+        :type price: Optional[float]
+        :param new_client_order_id: ClientOrderId
+        :type new_client_order_id: Optional[str]
 
-
-        :return: response dictionary
-        :rtype: dict
+        :return: list of order responses
+        :rtype: list
         """
-        return self.call(
-            "POST",
-            "api/v3/batchOrders",
-            params=dict(
-                batchOrders=batch_orders,
-                symbol=symbol,
-                side=side,
-                type=order_type,
-                quantity=quantity,
-                quoteOrderQty=quote_order_qty,
-                price=price,
-                newClientOrderId=new_client_order_id,
-            ),
-        )
+        # Validate required parameters based on order type
+        if order_type == "LIMIT":
+            if not quantity or not price:
+                raise ValueError("LIMIT orders require both quantity and price")
+        elif order_type == "MARKET":
+            if not quantity and not quote_order_qty:
+                raise ValueError("MARKET orders require either quantity or quoteOrderQty")
+
+        # Prepare batch orders
+        orders = []
+        for order in batch_orders:
+            order_data = {
+                "symbol": symbol,
+                "side": side,
+                "type": order_type,
+            }
+
+            if quantity:
+                order_data["quantity"] = str(quantity)
+            if quote_order_qty:
+                order_data["quoteOrderQty"] = str(quote_order_qty)
+            if price:
+                order_data["price"] = str(price)
+            if new_client_order_id:
+                order_data["newClientOrderId"] = new_client_order_id
+
+            # Add any additional fields from the batch order
+            order_data.update(order)
+            orders.append(order_data)
+
+        return self.call("POST", "api/v3/batchOrders", params=dict(batchOrders=json.dumps(orders)))
 
     def cancel_order(
         self,
@@ -868,9 +933,7 @@ class HTTP(_SpotHTTP):
         return self.call(
             "GET",
             "api/v3/order",
-            params=dict(
-                symbol=symbol, origClientOrderId=orig_client_order_id, orderId=order_id
-            ),
+            params=dict(symbol=symbol, origClientOrderId=orig_client_order_id, orderId=order_id),
         )
 
     def current_open_orders(self, symbol: str) -> dict:
@@ -922,9 +985,7 @@ class HTTP(_SpotHTTP):
         return self.call(
             "GET",
             "api/v3/allOrders",
-            params=dict(
-                symbol=symbol, startTime=start_time, endTime=end_time, limit=limit
-            ),
+            params=dict(symbol=symbol, startTime=start_time, endTime=end_time, limit=limit),
         )
 
     def account_information(self) -> dict:
@@ -1032,6 +1093,23 @@ class HTTP(_SpotHTTP):
     #
     # <=================================================================>
 
+    def query_symbol_commission(self, symbol: str) -> dict:
+        """
+        ### Query Symbol Commission.
+        #### Required permission: SPOT_ACCOUNT_READ
+
+        Weight(IP): 20
+
+        https://mexcdevelop.github.io/apidocs/spot_v3_en/#query-symbol-commission
+
+        :param symbol: symbol
+        :type symbol: str
+
+        :return: response dictionary
+        :rtype: dict
+        """
+        return self.call("GET", "api/v3/tradeFee", params=dict(symbol=symbol))
+
     def get_currency_info(self) -> dict:
         """
         ### Query the currency information.
@@ -1051,6 +1129,7 @@ class HTTP(_SpotHTTP):
         coin: str,
         address: str,
         amount: int,
+        contract_address: Optional[str] = None,
         withdraw_order_id: Optional[str] = None,
         network: Optional[str] = None,
         memo: Optional[str] = None,
@@ -1062,7 +1141,7 @@ class HTTP(_SpotHTTP):
 
         Weight(IP): 1
 
-        https://mexcdevelop.github.io/apidocs/spot_v3_en/#withdraw
+        https://mexcdevelop.github.io/apidocs/spot_v3_en/#withdraw-new
 
         :param coin: coin
         :type coin: str
@@ -1070,6 +1149,8 @@ class HTTP(_SpotHTTP):
         :type withdraw_order_id: str
         :param network: (optional) withdraw network
         :type network: str
+        :param contract_address: (optional) contract address
+        :type contract_address: str
         :param address: withdraw address
         :type address: str
         :param memo: (optional) memo(If memo is required in the address, it must be passed in)
@@ -1084,11 +1165,12 @@ class HTTP(_SpotHTTP):
         """
         return self.call(
             "POST",
-            "api/v3/capital/withdraw/apply",
+            "api/v3/capital/withdraw",
             params=dict(
                 coin=coin,
                 withdrawOrderId=withdraw_order_id,
-                network=network,
+                netWork=network,
+                contractAddress=contract_address,
                 address=address,
                 memo=memo,
                 amount=amount,
@@ -1280,9 +1362,7 @@ class HTTP(_SpotHTTP):
             params=dict(coin=coin, page=page, limit=limit),
         )
 
-    def user_universal_transfer(
-        self, from_account_type: str, to_account_type: str, asset: str, amount: int
-    ) -> dict:
+    def user_universal_transfer(self, from_account_type: str, to_account_type: str, asset: str, amount: int) -> dict:
         """
         ### User Universal Transfer.
         #### Required permission: SPOT_TRANSFER_WRITE
@@ -1378,9 +1458,7 @@ class HTTP(_SpotHTTP):
         :return: response dictionary
         :rtype: dict
         """
-        return self.call(
-            "GET", "api/v3/capital/transfer/tranId", params=dict(tranId=tran_id)
-        )
+        return self.call("GET", "api/v3/capital/transfer/tranId", params=dict(tranId=tran_id))
 
     def get_assets_convert_into_mx(self) -> dict:
         """
@@ -1452,26 +1530,61 @@ class HTTP(_SpotHTTP):
             params=dict(startTime=start_time, endTime=end_time, page=page, limit=limit),
         )
 
-    # <=================================================================>
-    #
-    #                               ETF
-    #
-    # <=================================================================>
-
-    def get_etf_info(self, symbol: Optional[str] = None) -> dict:
+    def internal_transfer(self, to_account_type: str, to_account: str, asset: str, amount: float) -> dict:
         """
-        ### Get ETF info.
-        #### Weight(IP): 1
+        ### Internal Transfer.
+        #### Required permission: SPOT_WITHDRAW_WRITE
 
-        https://mexcdevelop.github.io/apidocs/spot_v3_en/#get-etf-info
+        Weight(IP): 1
 
-        :param symbol: (optional) ETF symbol
-        :type symbol: str
+        https://mexcdevelop.github.io/apidocs/spot_v3_en/#internal-transfer
+
+        :param to_account_type: toAccountType:"EMAIL","UID","MOBILE"
+        :type to_account_type: str
+        :param to_account: toAccount
+        :type to_account: str
+        :param asset: asset
+        :type asset: str
+        :param amount: amount
+        :type amount: float
 
         :return: response dictionary
         :rtype: dict
         """
-        return self.call("GET", "api/v3/etf/info", params=dict(symbol=symbol))
+
+        return self.call(
+            "POST",
+            "api/v3/capital/transfer/internal",
+            params=dict(
+                toAccountType=to_account_type,
+                toAccount=to_account,
+                asset=asset,
+                amount=amount,
+            ),
+        )
+
+    def internal_transfer_history(self, start_time: int, end_time: int) -> dict:
+        """
+        ### Internal Transfer History.
+        #### Required permission: SPOT_WITHDRAW_READ
+
+        Weight(IP): 1
+
+        https://mexcdevelop.github.io/apidocs/spot_v3_en/#internal-transfer-history
+
+        :param start_time: startTime
+        :type start_time: int
+        :param end_time: endTime
+        :type end_time: int
+
+        :return: response dictionary
+        :rtype: dict
+        """
+        return self.call(
+            "GET",
+            "api/v3/capital/transfer/internal",
+            params=dict(startTime=start_time, endTime=end_time),
+        )
 
     # <=================================================================>
     #
@@ -1496,45 +1609,58 @@ class HTTP(_SpotHTTP):
 
         Start a new user data stream. The stream will close after 60 minutes unless a keepalive is sent.
 
-        :return: response dictionary
+        :return: response dictionary containing listenKey
         :rtype: dict
         """
-        return self.call(
-            "POST", "api/v3/userDataStream", params={"please_sign_it": None}
-        )
+        return self.call("POST", "api/v3/userDataStream")
+
+    def get_listen_keys(self) -> dict:
+        """
+        ### Get Valid Listen Keys.
+        #### Required permission: SPOT_ACCOUNT_R
+
+        https://mexcdevelop.github.io/apidocs/spot_v3_en/#listen-key
+
+        Retrieves all currently valid listen keys.
+
+        :return: response dictionary containing list of listenKeys
+        :rtype: dict
+        """
+        return self.call("GET", "api/v3/userDataStream")
 
     def keep_alive_listen_key(self, listen_key: str) -> dict:
         """
         ### Keep-alive a ListenKey.
-        #### Required permission: none
+        #### Required permission: SPOT_ACCOUNT_R
 
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#listen-key
+
+        Extends the validity to 60 minutes from the time of this call. It is recommended to send a request every 30 minutes.
 
         :param listen_key: Listen key
         :type listen_key: str
 
-        :return: response dictionary
+        :return: response dictionary containing listenKey
         :rtype: dict
         """
-        return self.call(
-            "PUT", "api/v3/userDataStream", params=dict(listenKey=listen_key)
-        )
+        return self.call("PUT", "api/v3/userDataStream", params=dict(listenKey=listen_key))
 
-    def close_listen_key(self) -> dict:
+    def close_listen_key(self, listen_key: str) -> dict:
         """
         ### Close a ListenKey.
-        #### Required permission: None
-
-        Weight(IP): 1, Weight(UID): 1
+        #### Required permission: SPOT_ACCOUNT_R
 
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#listen-key
 
-        :return: response dictionary
+        Closes the user data stream.
+
+        :param listen_key: Listen key
+        :type listen_key: str
+
+        :return: response dictionary containing listenKey
         :rtype: dict
         """
-        return self.call(
-            "DELETE", "api/v3/userDataStream", params={"please_sign_it": None}
-        )
+        return self.call("DELETE", "api/v3/userDataStream", params=dict(listenKey=listen_key))
 
     # <=================================================================>
     #
@@ -1646,9 +1772,7 @@ class HTTP(_SpotHTTP):
         :return: response dictionary
         :rtype: dict
         """
-        return self.call(
-            "GET", "api/v3/rebate/referCode", params=dict(please_sign_me=None)
-        )
+        return self.call("GET", "api/v3/rebate/referCode", params=dict(please_sign_me=None))
 
     def affiliate_commission_record(
         self,
@@ -1797,6 +1921,8 @@ class WebSocket(_SpotWebSocket):
         http_no_proxy: Optional[list] = None,
         http_proxy_auth: Optional[tuple] = None,
         http_proxy_timeout: Optional[int] = None,
+        proto: Optional[bool] = False,
+        extend_proto_body: Optional[bool] = False,
     ):
         """
         Initializes the class instance with the provided arguments.
@@ -1825,6 +1951,29 @@ class WebSocket(_SpotWebSocket):
 
         :param trace_logging: Whether or not to enable trace logging. (Optional)
         :type trace_logging: bool
+
+        :param http_proxy_host: The host for the HTTP proxy. (Optional)
+        :type http_proxy_host: str
+
+        :param http_proxy_port: The port for the HTTP proxy. (Optional)
+        :type http_proxy_port: int
+
+        :param http_no_proxy: A list of hosts to exclude from the HTTP proxy. (Optional)
+        :type http_no_proxy: list
+
+        :param http_proxy_auth: A tuple containing the username and password for the HTTP proxy. (Optional)
+        :type http_proxy_auth: tuple
+
+        :param http_proxy_timeout: The timeout in seconds for the HTTP proxy. (Optional)
+        :type http_proxy_timeout: int
+
+        :param proto: Whether or not to use the proto protocol. (Optional)
+        :type proto: bool
+
+        :param extend_proto_body: Whether or not to extend the proto body. (Optional)
+        :type extend_proto_body: bool
+
+        :return: None
         """
         kwargs = dict(
             api_key=api_key,
@@ -1839,9 +1988,12 @@ class WebSocket(_SpotWebSocket):
             http_no_proxy=http_no_proxy,
             http_proxy_auth=http_proxy_auth,
             http_proxy_timeout=http_proxy_timeout,
+            proto=proto,
+            extend_proto_body=extend_proto_body,
         )
-
         self.listenKey = listenKey
+
+        super().__init__(**kwargs)
 
         # for keep alive connection to private spot websocket
         # need to send listen key at connection and send keep-alive request every 60 mins
@@ -1854,14 +2006,12 @@ class WebSocket(_SpotWebSocket):
             if not self.listenKey:
                 raise Exception(f"ListenKey not found. Error: {auth}")
 
-            kwargs["endpoint"] = f"wss://wbs.mexc.com/ws?listenKey={self.listenKey}"
+            self.endpoint = f"wss://wbs-api.mexc.com/ws?listenKey={self.listenKey}"
 
             # setup keep-alive connection loop
             self.kal = threading.Thread(target=lambda: self._keep_alive_loop())
             self.kal.daemon = True
             self.kal.start()
-
-        super().__init__(**kwargs)
 
     def _keep_alive_loop(self):
         """
@@ -1874,12 +2024,8 @@ class WebSocket(_SpotWebSocket):
         while True:
             time.sleep(59 * 60)  # 59 min
             if self.listenKey:
-                resp = HTTP(
-                    api_key=self.api_key, api_secret=self.api_secret
-                ).keep_alive_listen_key(self.listenKey)
-                logger.debug(
-                    f"keep-alive listenKey - {self.listenKey}. Response: {resp}"
-                )
+                resp = HTTP(api_key=self.api_key, api_secret=self.api_secret).keep_alive_listen_key(self.listenKey)
+                logger.debug(f"keep-alive listenKey - {self.listenKey}. Response: {resp}")
             else:
                 break
 
@@ -1890,7 +2036,10 @@ class WebSocket(_SpotWebSocket):
     # <=================================================================>
 
     def deals_stream(
-        self, callback: Callable[..., None], symbol: Union[str, List[str]]
+        self,
+        callback: Callable[[dict | ProtoTyping.PublicDealsV3Api], None],
+        symbol: Union[str, List[str]],
+        interval: str = None
     ):
         """
         ### Trade Streams
@@ -1899,9 +2048,11 @@ class WebSocket(_SpotWebSocket):
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#trade-streams
 
         :param callback: the callback function
-        :type callback: Callable[..., None]
+        :type callback: Callable[[dict | ProtoTyping.PublicDealsV3Api], None]
         :param symbol: the name of the contract
         :type symbol: Union[str,List[str]]
+        :param interval: the interval for the stream, default is None. Possible values '100ms' or '10s'
+        :type symbol: str
 
         :return: None
         """
@@ -1910,18 +2061,34 @@ class WebSocket(_SpotWebSocket):
         else:
             symbols = symbol  # list
         params = [dict(symbol=s) for s in symbols]
-        topic = "public.deals"
-        self._ws_subscribe(topic, callback, params)
+        topic = "public.aggre.deals"
+        self._ws_subscribe(topic, callback, params, interval)
 
-    def kline_stream(self, callback: Callable[..., None], symbol: str, interval: int):
+    def kline_stream(
+        self,
+        callback: Callable[[dict | ProtoTyping.PublicSpotKlineV3Api], None],
+        symbol: str,
+        interval: Literal[
+            "Min1",
+            "Min5",
+            "Min15",
+            "Min30",
+            "Min60",
+            "Hour4",
+            "Hour8",
+            "Day1",
+            "Week1",
+            "Month1",
+        ],
+    ):
         """
         ### Kline Streams
         The Kline/Candlestick Stream push updates to the current klines/candlestick every second.
 
-        https://mexcdevelop.github.io/apidocs/spot_v3_en/#kline-streams
+        https://mexcdevelop.github.io/apidocs/spot_v3_en/#k-line-streams
 
         :param callback: the callback function
-        :type callback: Callable[..., None]
+        :type callback: Callable[[dict | ProtoTyping.PublicSpotKlineV3Api], None]
         :param symbol: the name of the contract
         :type symbol: str
         :param interval: the interval of the kline
@@ -1933,26 +2100,33 @@ class WebSocket(_SpotWebSocket):
         topic = "public.kline"
         self._ws_subscribe(topic, callback, params)
 
-    def increase_depth_stream(self, callback: Callable[..., None], symbol: str):
+    def depth_stream(
+        self,
+        callback: Callable[[dict | ProtoTyping.PublicIncreaseDepthsV3Api], None],
+        symbol: str,
+    ):
         """
         ### Diff.Depth Stream
-        If the quantity is 0, it means that the order of the price has been cancel or traded,remove the price level.
+        If the order quantity (quantity) for a price level is 0, it indicates that the order at that price has been canceled or executed, and that price level should be removed.
 
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#diff-depth-stream
 
         :param callback: the callback function
-        :type callback: Callable[..., None]
+        :type callback: Callable[[dict | ProtoTyping.PublicIncreaseDepthsV3Api], None]
         :param symbol: the name of the contract
         :type symbol: str
 
         :return: None
         """
         params = [dict(symbol=symbol)]
-        topic = "public.increase.depth"
+        topic = "public.aggre.depth"
         self._ws_subscribe(topic, callback, params)
 
     def limit_depth_stream(
-        self, callback: Callable[..., None], symbol: str, level: int
+        self,
+        callback: Callable[[dict | ProtoTyping.PublicLimitDepthsV3Api], None],
+        symbol: str,
+        level: int,
     ):
         """
         ### Partial Book Depth Streams
@@ -1961,7 +2135,7 @@ class WebSocket(_SpotWebSocket):
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#partial-book-depth-streams
 
         :param callback: the callback function
-        :type callback: Callable[..., None]
+        :type callback: Callable[[dict | ProtoTyping.PublicLimitDepthsV3Api], None]
         :param symbol: the name of the contract
         :type symbol: str
         :param level: the level of the depth. Valid are 5, 10, or 20.
@@ -1973,7 +2147,11 @@ class WebSocket(_SpotWebSocket):
         topic = "public.limit.depth"
         self._ws_subscribe(topic, callback, params)
 
-    def book_ticker_stream(self, callback: Callable[..., None], symbol: str):
+    def book_ticker_stream(
+        self,
+        callback: Callable[[dict | ProtoTyping.PublicBookTickerV3Api], None],
+        symbol: str,
+    ):
         """
         ### Individual Symbol Book Ticker Streams
         Pushes any update to the best bid or ask's price or quantity in real-time for a specified symbol.
@@ -1981,14 +2159,36 @@ class WebSocket(_SpotWebSocket):
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#partial-book-depth-streams
 
         :param callback: the callback function
-        :type callback: Callable[..., None]
+        :type callback: Callable[[dict | ProtoTyping.PublicBookTickerV3Api], None]
         :param symbols: the names of the contracts
         :type symbols: str
 
         :return: None
         """
         params = [dict(symbol=symbol)]
-        topic = "public.bookTicker"
+        topic = "public.aggre.bookTicker"
+        self._ws_subscribe(topic, callback, params)
+
+    def book_ticker_batch_stream(
+        self,
+        callback: Callable[[dict | ProtoTyping.PublicBookTickerBatchV3Api], None],
+        symbols: List[str],
+    ):
+        """
+        ### Individual Symbol Book Ticker Streams (Batch Aggregation)
+        This batch aggregation version pushes the best order information for a specified trading pair.
+
+        https://mexcdevelop.github.io/apidocs/spot_v3_en/#individual-symbol-book-ticker-streams-batch-aggregation
+
+        :param callback: the callback function
+        :type callback: Callable[[dict | ProtoTyping.PublicBookTickerBatchV3Api], None]
+        :param symbols: the names of the contracts
+        :type symbols: List[str]
+
+        :return: None
+        """
+        params = [dict(symbol=symbol) for symbol in symbols]
+        topic = "public.bookTicker.batch"
         self._ws_subscribe(topic, callback, params)
 
     # <=================================================================>
@@ -1997,7 +2197,7 @@ class WebSocket(_SpotWebSocket):
     #
     # <=================================================================>
 
-    def account_update(self, callback: Callable[..., None]):
+    def account_update(self, callback: Callable[[dict | ProtoTyping.PrivateAccountV3Api], None]):
         """
         ### Spot Account Update
         The server will push an update of the account assets when the account balance changes.
@@ -2005,7 +2205,7 @@ class WebSocket(_SpotWebSocket):
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#websocket-user-data-streams
 
         :param callback: the callback function
-        :type callback: Callable[..., None]
+        :type callback: Callable[[dict | ProtoTyping.PrivateAccountV3Api], None]
 
         :return: None
         """
@@ -2013,14 +2213,14 @@ class WebSocket(_SpotWebSocket):
         topic = "private.account"
         self._ws_subscribe(topic, callback, params)
 
-    def account_deals(self, callback: Callable[..., None]):
+    def account_deals(self, callback: Callable[[dict | ProtoTyping.PrivateDealsV3Api], None]):
         """
         ### Spot Account Deals
 
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#spot-account-deals
 
         :param callback: the callback function
-        :type callback: Callable[..., None]
+        :type callback: Callable[[dict | ProtoTyping.PrivateDealsV3Api], None]
 
         :return: None
         """
@@ -2028,14 +2228,14 @@ class WebSocket(_SpotWebSocket):
         topic = "private.deals"
         self._ws_subscribe(topic, callback, params)
 
-    def account_orders(self, callback: Callable[..., None]):
+    def account_orders(self, callback: Callable[[dict | ProtoTyping.PrivateOrdersV3Api], None]):
         """
         ### Spot Account Orders
 
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#spot-account-orders
 
         :param callback: the callback function
-        :type callback: Callable[..., None]
+        :type callback: Callable[[dict | ProtoTyping.PrivateOrdersV3Api], None]
 
         :return: None
         """
