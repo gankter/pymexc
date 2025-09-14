@@ -184,20 +184,19 @@ class _AsyncWebSocketManager(_WebSocketManager):
         self.connected = False
         super()._on_close()
 
-    """
-    if asyncio.iscoroutinefunction(callback_function):
-            await callback_function(callback_data)
-        else:
-            callback_function(callback_data)
-            
-    """
+
     async def _process_normal_message(self, message: dict):
         callback_function, callback_data = super()._process_normal_message(message=message, parse_only=True)
 
         if callback_function is None:
             return
-
-        await callback_function(callback_data)
+        
+        if asyncio.iscoroutinefunction(callback_function):
+            await callback_function(callback_data)
+        else:
+            callback_function(callback_data)
+            
+        
 
 
 # # # # # # # # # #

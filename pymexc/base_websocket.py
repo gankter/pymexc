@@ -141,15 +141,16 @@ class _WebSocketManager:
 
         elif isinstance(message, bytes):
             # Deserialize message
+            #print(f"Распарсил {message}")
             _message = PushDataV3ApiWrapper()
             _message.ParseFromString(message)
-
+            #print(f" полученное сообщение {_message}")
         else:
             raise ValueError(f"Unserializable message type: {type(message)} | {message}")
 
         if parse_only:
             return _message
-
+        #print(self.callback)
         self.callback(_message)
 
     def is_connected(self):
@@ -387,6 +388,8 @@ class _WebSocketManager:
         bodies = {
             "public.kline": "publicSpotKline",
             "public.deals": "publicDeals",
+            "public.aggre.depth": "publicAggreDepths",
+            "public.aggre.deals": "publicAggreDeals",
             "public.increase.depth": "publicIncreaseDepths",
             "public.limit.depth": "publicLimitDepths",
             "public.bookTicker": "publicBookTicker",
@@ -394,6 +397,22 @@ class _WebSocketManager:
             "private.deals": "privateDeals",
             "private.orders": "privateOrders",
         }
+        
+        #publicDeals: ProtoTyping.PublicDealsV3Api
+        #publicIncreaseDepths: ProtoTyping.PublicIncreaseDepthsV3Api
+        #publicLimitDepths: ProtoTyping.PublicLimitDepthsV3Api
+        #privateOrders: ProtoTyping.PrivateOrdersV3Api
+        #publicBookTicker: ProtoTyping.PublicBookTickerV3Api
+        #privateDeals: ProtoTyping.PrivateDealsV3Api
+        #privateAccount: ProtoTyping.PrivateAccountV3Api
+        #publicSpotKline: ProtoTyping.PublicSpotKlineV3Api
+        ##publicMiniTicker: ProtoTyping.PublicMiniTickerV3Api
+        ##publicMiniTickers: ProtoTyping.PublicMiniTickersV3Api
+        ##publicBookTickerBatch: ProtoTyping.PublicBookTickerBatchV3Api
+        ##publicIncreaseDepthsBatch: ProtoTyping.PublicIncreaseDepthsBatchV3Api
+        ##publicAggreDepths: ProtoTyping.PublicAggreDepthsV3Api
+        ##publicAggreDeals: ProtoTyping.PublicAggreDealsV3Api
+        ##publicAggreBookTicker: ProtoTyping.PublicAggreBookTickerV3Api
 
         if topic in bodies:
             return getattr(message, bodies[topic])  # default=message
@@ -588,7 +607,7 @@ class _SpotWebSocketManager(_WebSocketManager):
             "params": [
                 "@".join(
                     [f"spot@{topic}.v3.api" + (".pb" if self.proto else "")] 
-                    + ([str(interval)] if interval else [])
+                    #+ ([str(interval)] if interval else [])
                     + list(map(str, params.values()))
                 )
                 for params in params_list
