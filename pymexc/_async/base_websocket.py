@@ -186,15 +186,15 @@ class _AsyncWebSocketManager(_WebSocketManager):
 
 
     async def _process_normal_message(self, message: dict):
-        callback_function, callback_data = super()._process_normal_message(message=message, parse_only=True)
+        callback_function, callback_data, wrapper_data = super()._process_normal_message(message=message, parse_only=True)
 
         if callback_function is None:
             return
         
         if asyncio.iscoroutinefunction(callback_function):
-            await callback_function(callback_data)
+            await callback_function(callback_data,wrapper_data)
         else:
-            callback_function(callback_data)
+            callback_function(callback_data,wrapper_data)
             
         
 

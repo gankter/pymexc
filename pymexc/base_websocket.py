@@ -421,7 +421,7 @@ class _WebSocketManager:
             logger.warning(f"Body for topic {topic} not found. | Message: {message.__dict__}")
             return message
 
-    def _process_normal_message(self, message: dict | ProtoTyping.PushDataV3ApiWrapper, parse_only: bool = False):
+    def _process_normal_message(self, message: dict | ProtoTyping.PushDataV3ApiWrapper, parse_only: bool = True, return_wrapper_data = True):
         """
         Redirect message to callback function
         """
@@ -431,6 +431,14 @@ class _WebSocketManager:
         else:
             topic = self._topic(message.channel)
             callback_data = self.get_proto_body(message)
+            
+        if return_wrapper_data:
+            wrapper_data = dict(symbol = message.symbol, 
+                                symbolId = message.symbolId,
+                                createTime = message.createTime, 
+                                sendTime = message.sendTime)
+        else:
+            wrapper_data = None
 
         callback_function = self._get_callback(topic)
         if not callback_function:
@@ -438,9 +446,9 @@ class _WebSocketManager:
             return None, None
         else:
             if parse_only:
-                return callback_function, callback_data
+                return callback_function, callback_data, wrapper_data
 
-            callback_function(callback_data)
+            callback_function(callback_data,wrapper_data)
 
     def _process_subscription_message(self, message: dict):
         if message.get("id") == 0 and message.get("code") == 0:

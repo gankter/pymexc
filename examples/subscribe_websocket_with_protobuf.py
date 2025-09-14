@@ -15,8 +15,9 @@ logging.basicConfig(
 )
 
 
-async def handle_message(msg: ProtoTyping.PublicAggreDealsV3Api):
+def handle_message(msg: ProtoTyping.PublicAggreDealsV3Api):
     #pass
+    print(msg)
     for deal in msg.deals:
         match deal.tradeType:
             case 1:
