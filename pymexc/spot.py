@@ -35,7 +35,7 @@ while True:
 import logging
 import threading
 import time
-from tkinter import N
+N = 'n' #from tkinter import N
 from typing import Callable, List, Literal, Optional, Union
 import warnings
 import json
@@ -2060,7 +2060,7 @@ class WebSocket(_SpotWebSocket):
             symbols = [symbol]  # str
         else:
             symbols = symbol  # list
-        params = [dict(symbol=s) for s in symbols]
+        params = [dict(interval=interval,symbol=s) for s in symbols]
         topic = "public.aggre.deals"
         self._ws_subscribe(topic, callback, params, interval)
 
@@ -2104,6 +2104,7 @@ class WebSocket(_SpotWebSocket):
         self,
         callback: Callable[[dict | ProtoTyping.PublicIncreaseDepthsV3Api], None],
         symbol: str,
+        interval: Literal["100ms","10ms"]
     ):
         """
         ### Diff.Depth Stream
@@ -2118,7 +2119,7 @@ class WebSocket(_SpotWebSocket):
 
         :return: None
         """
-        params = [dict(symbol=symbol)]
+        params = [dict(interval=interval,symbol=symbol)]
         topic = "public.aggre.depth"
         self._ws_subscribe(topic, callback, params)
 
