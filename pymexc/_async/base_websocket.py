@@ -350,17 +350,22 @@ class _SpotWebSocketManager(_AsyncWebSocketManager):
 
         self.private_topics = ["account", "deals", "orders"]
 
-    async def subscribe(self, topic: str, callback: Callable, params_list: list, interval: str = None):
-        subscription_args = {
-            "method": "SUBSCRIPTION",
-            "params": [
-                "@".join(
+    def _create_subscription_message(self, topic: str, params: dict, interval: str = None):
+        return "@".join(
                     [f"spot@{topic}.v3.api" + (".pb" if self.proto else "")] 
                     + ([str(interval)] if interval else [])
                     + list(map(str, params.values()))
                 )
+
+    async def subscribe(self, topic: str, callback: Callable, params_list: list, interval: str = None):
+
+        subscription_args_params = [
+                self._create_subscription_message(topic = topic, params = params, interval = interval)
                 for params in params_list
-            ],
+            ]
+        subscription_args = {
+            "method": "SUBSCRIPTION",
+            "params": subscription_args_params,
         }
         self._check_callback_directory(subscription_args)
 
