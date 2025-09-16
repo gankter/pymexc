@@ -443,7 +443,7 @@ class _WebSocketManager:
         callback_function = self._get_callback(topic)
         if not callback_function:
             logger.warning(f"Callback for topic {topic} not found. | Message: {message}")
-            return None, None
+            return None, None, None
         else:
             if parse_only:
                 return callback_function, callback_data, wrapper_data

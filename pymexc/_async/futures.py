@@ -39,12 +39,31 @@ import warnings
 
 logger = logging.getLogger(__name__)
 
-try:
-    from .base import _FuturesHTTP
-    from ..base_websocket import FUTURES_PERSONAL_TOPICS, _FuturesWebSocket
-except ImportError:
-    from pymexc._async.base import _FuturesHTTP
-    from pymexc.base_websocket import FUTURES_PERSONAL_TOPICS, _FuturesWebSocket
+
+"""
+SPOT = "wss://wbs-api.mexc.com/ws"
+FUTURES = "wss://contract.mexc.com/edge"
+FUTURES_PERSONAL_TOPICS = [
+    "order",
+    "order.deal",
+    "position",
+    "plan.order",
+    "stop.order",
+    "stop.planorder",
+    "risk.limit",
+    "adl.level",
+    "asset",
+    "liquidate.risk",
+]
+
+"""
+#try:
+#    from .base import _FuturesHTTP
+#    from ..base_websocket import FUTURES_PERSONAL_TOPICS, _FuturesWebSocket
+#except ImportError:
+from pymexc._async.base import _FuturesHTTP
+from pymexc._async.base_websocket import _FuturesWebSocket
+from ..base_websocket import FUTURES_PERSONAL_TOPICS
 
 
 class HTTP(_FuturesHTTP):
@@ -1476,7 +1495,7 @@ class WebSocket(_FuturesWebSocket):
         if proto:
             warnings.warn("proto is not supported in futures websocket api", DeprecationWarning)
 
-    async def unsubscribe(self, method: str | Callable):
+    async def unsubscribe(self, method: str | Callable, param):
         personal_filters = ["personal.filter", "filter", "personal"]
         if (
             method in personal_filters

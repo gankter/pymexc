@@ -185,8 +185,11 @@ class _AsyncWebSocketManager(_WebSocketManager):
         super()._on_close()
 
 
-    async def _process_normal_message(self, message: dict):
-        callback_function, callback_data, wrapper_data = super()._process_normal_message(message=message, parse_only=True)
+    async def _process_normal_message(self, message: dict, return_wrapper_data:bool ,full_topic:bool): 
+        callback_function, callback_data, wrapper_data = super()._process_normal_message(message=message,
+                                                                                         return_wrapper_data = return_wrapper_data,
+                                                                                         full_topic = full_topic, 
+                                                                                         parse_only=True)
 
         if callback_function is None:
             return
@@ -243,13 +246,13 @@ class _FuturesWebSocketManager(_AsyncWebSocketManager):
                 for sub in self.subscriptions.copy():
                     if _cond_no_param(sub):
                         if need_remove_callback: self._pop_callback(method)  
-                        await self.ws.send(json.dumps({"method": f"unsub.{method}", "param": sub["param"]}))
+                        await self.ws.send_json({"method": f"unsub.{method}", "param": sub["param"]})
                         self.subscriptions.remove(sub)
             else:  
                 for sub in self.subscriptions.copy():
                     if _cond_with_param(sub,param):
                         if need_remove_callback: self._pop_callback(method)
-                        await self.ws.send(json.dumps({"method": f"unsub.{method}", "param": param}))
+                        await self.ws.send_json({"method": f"unsub.{method}", "param": param})
                         self.subscriptions.remove(sub)
             logger.debug(f"Unsubscribed from {method}")
         else:
@@ -290,7 +293,7 @@ class _FuturesWebSocketManager(_AsyncWebSocketManager):
         elif is_error_message():
             print(f"WebSocket return error: {message}")
         else:
-            await self._process_normal_message(message)
+            await self._process_normal_message(message ,return_wrapper_data = False, full_topic = False)
 
     async def custom_topic_stream(self, topic, callback):
         return await self.subscribe(topic=topic, callback=callback)
