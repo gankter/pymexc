@@ -333,7 +333,11 @@ class _FuturesWebSocket(_FuturesWebSocketManager):
             await self._connect(self.endpoint)
 
     async def _ws_subscribe(self, topic, callback, params: list = []):
-        await self.connect()
+        #await self.connect()
+        
+        if not self.is_connected():
+            await self._connect(self.endpoint)
+            
         await self.subscribe(topic, callback, params)
 
 
