@@ -293,7 +293,7 @@ class _FuturesWebSocketManager(_AsyncWebSocketManager):
         elif is_error_message():
             print(f"WebSocket return error: {message}")
         else:
-            await self._process_normal_message(message ,return_wrapper_data = False, full_topic = False)
+            await self._process_normal_message(message , return_wrapper_data = False, full_topic = False)
 
     async def custom_topic_stream(self, topic, callback):
         return await self.subscribe(topic=topic, callback=callback)
@@ -432,7 +432,7 @@ class _SpotWebSocketManager(_AsyncWebSocketManager):
         if isinstance(message, dict) and is_subscription_message():
             self._process_subscription_message(message)
         else:
-            await self._process_normal_message(message)
+            await self._process_normal_message(message, return_wrapper_data = True, full_topic = True)
 
     async def custom_topic_stream(self, topic, callback):
         return await self.subscribe(topic=topic, callback=callback)
