@@ -114,7 +114,7 @@ class _AsyncWebSocketManager(_WebSocketManager):
                 # no previous WSS connection.
                 return
 
-            for req_id, subscription_message in self.subscriptions.items():
+            for subscription_message in self.subscriptions:
                 await self.ws.send_json(subscription_message)
 
         self.attempting_connection = True
@@ -333,7 +333,11 @@ class _FuturesWebSocket(_FuturesWebSocketManager):
             await self._connect(self.endpoint)
 
     async def _ws_subscribe(self, topic, callback, params: list = []):
-        await self.connect()
+        #await self.connect()
+        
+        if not self.is_connected():
+            await self._connect(self.endpoint)
+            
         await self.subscribe(topic, callback, params)
 
 

@@ -138,9 +138,14 @@ class _FuturesHTTP(MexcSDK):
         self.session.headers.update(
             {
                 "Content-Type": "application/json",
-                "ApiKey": self.api_key,
             }
         )
+        if self.api_key and self.api_secret:
+            self.session.headers.update(
+                {
+                    "ApiKey": self.api_key
+                }
+                )
 
     def sign(self, timestamp: str, **kwargs) -> str:
         """
