@@ -1519,7 +1519,7 @@ class WebSocket(_FuturesWebSocket):
         :return: None
         """
         params = {}
-        topic = "sub.tickers"
+        topic = "tickers"
         await self._ws_subscribe(topic, callback, params)
 
     async def ticker_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -1542,7 +1542,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "sub.ticker"
+        topic = "ticker"
         await self._ws_subscribe(topic, callback, params)
 
     async def deal_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -1564,7 +1564,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "sub.deal"
+        topic = "deal"
         await self._ws_subscribe(topic, callback, params)
 
     async def depth_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -1587,7 +1587,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "sub.depth"
+        topic = "depth"
         await self._ws_subscribe(topic, callback, params)
 
     async def depth_full_stream(self, callback: Awaitable[Callable[..., None]], symbol: str, limit: int = 20):
@@ -1610,7 +1610,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "sub.depth.full"
+        topic = "depth.full"
         await self._ws_subscribe(topic, callback, params)
 
     async def kline_stream(
@@ -1639,7 +1639,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "sub.kline"
+        topic = "kline"
         await self._ws_subscribe(topic, callback, params)
 
     async def funding_rate_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -1661,7 +1661,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "sub.funding.rate"
+        topic = "funding.rate"
         await self._ws_subscribe(topic, callback, params)
 
     async def index_price_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -1683,7 +1683,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "sub.index.price"
+        topic = "index.price"
         await self._ws_subscribe(topic, callback, params)
 
     async def fair_price_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -1704,7 +1704,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "sub.fair.price"
+        topic = "fair.price"
         await self._ws_subscribe(topic, callback, params)
 
     # <=================================================================>
