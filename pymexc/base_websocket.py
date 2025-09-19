@@ -442,11 +442,13 @@ class _WebSocketManager:
                                 sendTime = message.sendTime)
         else:
             wrapper_data = None
-
+        
         callback_function = self._get_callback(topic)
 
         if not callback_function:
             logger.warning(f"Callback for topic {topic} not found. | Message: {message}")
+            print(topic)
+            print(self.callback_directory)
             return None, None, None
         else:
             if parse_only:
