@@ -213,52 +213,61 @@ class _FuturesWebSocketManager(_AsyncWebSocketManager):
         callback_function = (
             kwargs.pop("callback_function") if kwargs.get("callback_function") else self._handle_incoming_message
         )
-
+        
+        self.message_shaper_dict = {
+            "tickers": lambda params: f"futures@ticker{(".pb" if self.proto else "")}@_",
+            "deal": lambda params: f"futures@deal{(".pb" if self.proto else "")}@{params['symbol']}",
+            "depth": lambda params: f"futures@depth{(".pb" if self.proto else "")}@{params['symbol']}", 
+            "depth.full": lambda params: f"futures@depth.full{(".pb" if self.proto else "")}@{params['symbol']}",
+            "kline": lambda params: f"futures@kline{(".pb" if self.proto else "")}@{params['symbol']}@{params['interval']}",
+            "funding.rate": lambda params: f"spot@public.bookTicker.batch.v3.api{(".pb" if self.proto else "")}@{params['symbol']}",
+            "index.price": lambda : [{}],
+            "fair.price": lambda : [{}],
+            "filter": lambda : [{}]
+        }
+        
         super().__init__(callback_function, ws_name, **kwargs)
+        
+    def _subscribe_one(self, topic: str, callback: Callable, params: dict, message_shaper: Callable):
+        subscribe_message = message_shaper(params)
+        self._check_callback_directory(subscribe_message)
+        self.subscriptions.append(subscribe_message)
+        self._set_callback(topic = subscribe_message, callback_function = callback )
+        return subscribe_message
+    
+    def _unsubscribe_one(self, topic: str, params: dict, message_shaper: Callable ):
+        subscribe_message = message_shaper(params)
+        #self._check_callback_directory(f"{topic}@{params.get("symbol","_")}")
+        self.subscriptions.remove(subscribe_message)
+        self._pop_callback(topic = subscribe_message)
+        logger.debug(f"Unsubscribed from {topic} with subscription message {subscribe_message}")
+        return {"method": topic, "param": params}
 
-    async def subscribe(self, topic, callback, params: dict = {}):
-        subscription_args = {"method": topic, "param": params}
-        self._check_callback_directory(subscription_args)
+    async def subscribe(self, topic, callback, params):
+        
+        subscription_message = self._subscribe_one(topic, callback, params, message_shaper = self.message_shaper_dict[topic])
+        self._check_callback_directory(subscription_message)
 
         while not self.is_connected():
             # Wait until the connection is open before subscribing.
-            time.sleep(0.1)
+            await asyncio.sleep(0.1)
 
-        await self.ws.send_json(subscription_args)
-        self.subscriptions.append(subscription_args)
-        self._set_callback(self._topic(topic), callback)
-        self.last_subsctiption = self._topic(topic)
-
-    async def unsubscribe(self, method: str | Callable, param: Optional[dict] = None) -> None:
-        if not method:
-            return
-
-        def _cond_with_param(sub,param):
-            return sub["method"] == f"sub.{method}" and sub["param"] == param
+        await self.ws.send_json({"method": f"sub.{topic}", "param": params} )
         
-        def _cond_no_param(sub):
-            return sub["method"] == f"sub.{method}"
-        
-        if isinstance(method, str):
-            need_remove_callback = len(self.subscriptions) == 1
-            if param is None:
-                for sub in self.subscriptions.copy():
-                    if _cond_no_param(sub):
-                        if need_remove_callback: self._pop_callback(method)  
-                        await self.ws.send_json({"method": f"unsub.{method}", "param": sub["param"]})
-                        self.subscriptions.remove(sub)
-            else:  
-                for sub in self.subscriptions.copy():
-                    if _cond_with_param(sub,param):
-                        if need_remove_callback: self._pop_callback(method)
-                        await self.ws.send_json({"method": f"unsub.{method}", "param": param})
-                        self.subscriptions.remove(sub)
-            logger.debug(f"Unsubscribed from {method}")
+        self.last_subsctiption = subscription_message
+
+    async def unsubscribe(self, topic: str | Callable, params: Optional[dict] ) -> None:
+
+        if isinstance(topic, str):
+            self._unsubscribe_one(self, topic, params, self.message_shaper_dict[topic])
+            await self.ws.send_json({"method": f"unsub.{topic}", "param": params})
+            
+            logger.debug(f"Unsubscribed from {topic}, params: {params}")
         else:
             # this is a func, get name
-            topic_name = method.__name__.replace("_stream", "").replace("_", ".")
+            topic_name = topic.__name__.replace("_stream", "").replace("_", ".")
 
-            return await self.unsubscribe(topic_name,param=param)
+            return await self.unsubscribe(topic_name,param=params)
 
     async def _process_auth_message(self, message: dict):
         # If we get successful futures auth, notify user
@@ -292,7 +301,7 @@ class _FuturesWebSocketManager(_AsyncWebSocketManager):
         elif is_error_message():
             print(f"WebSocket return error: {message}")
         else:
-            await self._process_normal_message(message , return_wrapper_data = False, full_topic = False)
+            await self._process_normal_message(message , return_wrapper_data = False)
 
     async def custom_topic_stream(self, topic, callback):
         return await self.subscribe(topic=topic, callback=callback)
@@ -367,13 +376,6 @@ class _SpotWebSocketManager(_AsyncWebSocketManager):
 
 
         self.private_topics = ["account", "deals", "orders"]
-
-    def _create_subscription_message(self, topic: str, params: dict, interval: str = None):
-        return "@".join(
-                    [f"spot@{topic}.v3.api" + (".pb" if self.proto else "")] 
-                    + ([str(interval)] if interval else [])
-                    + list(map(str, params.values()))
-                )
 
     def _subscribe_one(self, topic: str, callback: Callable, params: dict, message_shaper: Callable):
         subscribe_message = message_shaper(params)

@@ -427,7 +427,9 @@ class _WebSocketManager:
         """
 
         if isinstance(message, dict):
-            topic = message.get("channel") or message.get("c")# if not full_topic else (message.get("channel") or message.get("c"))
+            topic:str = message.get("channel") or message.get("c")# if not full_topic else (message.get("channel") or message.get("c"))
+            topic = topic.replace("push.","")
+            return_wrapper_data = False
             callback_data = message
         else:
             topic = message.channel#self._topic(message.channel) if not full_topic else message.channel
