@@ -421,15 +421,16 @@ class _WebSocketManager:
             logger.warning(f"Body for topic {topic} not found. | Message: {message.__dict__}")
             return message
 
-    def _process_normal_message(self, message: dict | ProtoTyping.PushDataV3ApiWrapper, parse_only: bool = True, return_wrapper_data = True, full_topic = False):
+    def _process_normal_message(self, message: dict | ProtoTyping.PushDataV3ApiWrapper, parse_only: bool = True, return_wrapper_data = True):
         """
         Redirect message to callback function
         """
+
         if isinstance(message, dict):
-            topic = self._topic(message.get("channel") or message.get("c")) if not full_topic else (message.get("channel") or message.get("c"))
+            topic = message.get("channel") or message.get("c")# if not full_topic else (message.get("channel") or message.get("c"))
             callback_data = message
         else:
-            topic = self._topic(message.channel) if not full_topic else message.channel
+            topic = message.channel#self._topic(message.channel) if not full_topic else message.channel
             callback_data = self.get_proto_body(message)
             
         if return_wrapper_data:
@@ -441,6 +442,7 @@ class _WebSocketManager:
             wrapper_data = None
 
         callback_function = self._get_callback(topic)
+
         if not callback_function:
             logger.warning(f"Callback for topic {topic} not found. | Message: {message}")
             return None, None, None

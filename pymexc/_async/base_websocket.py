@@ -185,10 +185,9 @@ class _AsyncWebSocketManager(_WebSocketManager):
         super()._on_close()
 
 
-    async def _process_normal_message(self, message: dict, return_wrapper_data:bool ,full_topic:bool): 
+    async def _process_normal_message(self, message: dict, return_wrapper_data:bool): 
         callback_function, callback_data, wrapper_data = super()._process_normal_message(message=message,
                                                                                          return_wrapper_data = return_wrapper_data,
-                                                                                         full_topic = full_topic, 
                                                                                          parse_only=True)
 
         if callback_function is None:
@@ -353,7 +352,19 @@ class _SpotWebSocketManager(_AsyncWebSocketManager):
         callback_function = (
             kwargs.pop("callback_function") if kwargs.get("callback_function") else self._handle_incoming_message
         )
+        self.message_shaper_dict = {
+            "public.aggre.deals": lambda params: f"spot@public.aggre.deals.v3.api{(".pb" if self.proto else "")}@{params['interval']}@{params['symbol']}",
+            "public.kline": lambda params: f"spot@public.kline.v3.api{(".pb" if self.proto else "")}@{params['interval']}@{params['symbol']}",
+            "public.aggre.depth": lambda params: f"spot@public.aggre.depth.v3.api{(".pb" if self.proto else "")}@{params['interval']}@{params['symbol']}", 
+            "public.limit.depth": lambda params: f"spot@public.limit.depth.v3.api{(".pb" if self.proto else "")}@{params['symbol']}@{params['level']}",
+            "public.aggre.bookTicker": lambda params: f"spot@public.aggre.bookTicker.v3.api{(".pb" if self.proto else "")}@{params['interval']}@{params['symbol']}",
+            "public.bookTicker.batch": lambda params: f"spot@public.bookTicker.batch.v3.api{(".pb" if self.proto else "")}@{params['symbol']}",
+            "private.account": lambda : [{}],
+            "private.deals": lambda : [{}],
+            "private.orders": lambda : [{}]
+        }
         super().__init__(callback_function, ws_name, **kwargs)
+
 
         self.private_topics = ["account", "deals", "orders"]
 
@@ -364,67 +375,79 @@ class _SpotWebSocketManager(_AsyncWebSocketManager):
                     + list(map(str, params.values()))
                 )
 
-    async def subscribe(self, topic: str, callback: Callable, params_list: list, interval: str = None):
+    def _subscribe_one(self, topic: str, callback: Callable, params: dict, message_shaper: Callable):
+        subscribe_message = message_shaper(params)
+        self._check_callback_directory(subscribe_message)
+        self.subscriptions.append(subscribe_message)
+        self._set_callback(topic = subscribe_message, callback_function = callback )
+        return subscribe_message
+    
+    def _unsubscribe_one(self, topic: str, params: dict, message_shaper: Callable = None):
+        subscribe_message = message_shaper(params)
+        #self._check_callback_directory(f"{topic}@{params.get("symbol","_")}")
+        self.subscriptions.remove(subscribe_message)
+        self._pop_callback(topic = subscribe_message)
+        logger.debug(f"Unsubscribed from {topic} with subscription message {subscribe_message}")
+        return subscribe_message
 
-        subscription_args_params = [
-                self._create_subscription_message(topic = topic, params = params, interval = interval)
-                for params in params_list
-            ]
+    async def subscribe(self, topic: str, callback: Callable, params_list: list):
+        
+        subscription_args_params = [self._subscribe_one(topic, callback, params, self.message_shaper_dict[topic]) for params in params_list ]
+        
         subscription_args = {
             "method": "SUBSCRIPTION",
             "params": subscription_args_params,
         }
-        self._check_callback_directory(subscription_args)
 
         while not self.is_connected():
             # Wait until the connection is open before subscribing.
             await asyncio.sleep(0.1)
 
         await self.ws.send_json(subscription_args)
-        self.subscriptions.append(subscription_args)
-        self._set_callback(topic, callback)
-        self.last_subsctiption = topic
+        
+        self.last_subsctiption = subscription_args_params[-1]
+       
 
-    async def unsubscribe(self, *topics: str | Callable):
-        if all([isinstance(topic, str) for topic in topics]):
-            topics = [
-                f"private.{topic}"
-                if topic in self.private_topics
-                else f"public.{topic}"
+    async def unsubscribe(self, topic: str | Callable, params_list:list[dict]):
+
+        if isinstance(topic, str):
+            unsub_args_params = [self._unsubscribe_one(topic, params, self.message_shaper_dict[topic]) for params in params_list ]
+            #topic = f"private.{topic}"if topic in self.private_topics else f"public.{topic}"
                 # if user provide function .book_ticker_stream()
-                .replace("book.ticker", "bookTicker")
-                for topic in topics
-            ]
+                #.replace("book.ticker", "bookTicker")
+                #for topic in topics
+            
             # remove callbacks
-            for topic in topics:
-                self._pop_callback(topic)
+            #for topic in topics:
+            #    self._pop_callback(topic)
 
             # send unsub message
+
             await self.ws.send_json(
                 {
-                    "method": "UNSUBSCRIPTION",
-                    "params": ["@".join([f"spot@{t}.v3.api" + (".pb" if self.proto else "")]) for t in topics],
+                    "method": "UNSUBSCRIPTION", # "@".join([f"spot@{t}.v3.api" + (".pb" if self.proto else "")]) for t in topics
+                    "params": unsub_args_params,
                 }
             )
 
             # remove subscriptions from list
-            for i, sub in enumerate(self.subscriptions):
+            '''for i, sub in enumerate(self.subscriptions):
                 new_params = [x for x in sub["params"] for _topic in topics if _topic not in x]
                 if new_params:
                     self.subscriptions[i]["params"] = new_params
                 else:
                     self.subscriptions.remove(sub)
-                break
+                break'''
 
-            logger.debug(f"Unsubscribed from {topics}")
+            
         else:
             # some funcs in list
-            topics = [
-                x.__name__.replace("_stream", "").replace("_", ".") if getattr(x, "__name__", None) else x
-                #
-                for x in topics
-            ]
-            return await self.unsubscribe(*topics)
+            
+            str_topic_short = topic.__name__.replace("_stream", "").replace("_", ".") if getattr(topic, "__name__", None) else topic
+            #str_topic = f"spot@{str_topic_short}.v3.api{(".pb" if self.proto else "")}"
+            print(str_topic_short)
+            
+            return await self.unsubscribe(str_topic_short, params_list)
 
     async def _handle_incoming_message(self, message):
         def is_subscription_message():
@@ -436,7 +459,7 @@ class _SpotWebSocketManager(_AsyncWebSocketManager):
         if isinstance(message, dict) and is_subscription_message():
             self._process_subscription_message(message)
         else:
-            await self._process_normal_message(message, return_wrapper_data = True, full_topic = True)
+            await self._process_normal_message(message, return_wrapper_data = True)
 
     async def custom_topic_stream(self, topic, callback):
         return await self.subscribe(topic=topic, callback=callback)
@@ -458,10 +481,16 @@ class _SpotWebSocket(_SpotWebSocketManager):
         self.endpoint = endpoint
         loop = loop or asyncio.get_event_loop()
 
-        super().__init__(self.ws_name, api_key=api_key, api_secret=api_secret, loop=loop, **kwargs)
+        
 
-    async def _ws_subscribe(self, topic, callback, params: list = [], interval: str = None):
+        super().__init__(self.ws_name, api_key=api_key, api_secret=api_secret, loop=loop, **kwargs)
+    
+        
+
+    async def _ws_subscribe(self, topic, callback, params_list: list[dict]):
+        # Можно сюда передать функцию - формирователь сообщения
+
         if not self.is_connected():
             await self._connect(self.endpoint)
 
-        await self.subscribe(topic, callback, params, interval)
+        await self.subscribe(topic, callback, params_list)

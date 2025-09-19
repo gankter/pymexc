@@ -2053,7 +2053,7 @@ class WebSocket(_SpotWebSocket):
     #
     # <=================================================================>
 
-    async def deals_stream(self, callback: Callable[..., None], symbol: Union[str, List[str]], interval: str = None):
+    async def public_aggre_deals_stream(self, callback: Callable[..., None], symbol: Union[str, List[str]], interval: Literal["100ms","10s"] = None):
         """
         ### Trade Streams
         The Trade Streams push raw trade information; each trade has a unique buyer and seller.
@@ -2073,14 +2073,20 @@ class WebSocket(_SpotWebSocket):
             symbols = [symbol]  # str
         else:
             symbols = symbol  # list
-        params = [dict(symbol=s) for s in symbols]
+        params_list = [dict(symbol = s, interval = interval) for s in symbols]
         topic = "public.aggre.deals"
-        await self._ws_subscribe(topic, callback, params, interval)
+  
+        await self._ws_subscribe(topic, callback, params_list)
 
-    async def kline_stream(self, callback: Callable[..., None], symbol: str, interval: int):
+    async def public_kline_stream(self, 
+                           callback: Callable[..., None], 
+                           symbol: Union[str, List[str]], 
+                           interval: Literal["Min1", "Min5", "Min15", "Min30", "Min60", "Hour4", "Hour8","Day1", "Week1","Month1"]):
         """
         ### Kline Streams
         The Kline/Candlestick Stream push updates to the current klines/candlestick every second.
+
+        subscribe pattern spot@public.kline.v3.api.pb@<symbol>@<interval>
 
         https://mexcdevelop.github.io/apidocs/spot_v3_en/#kline-streams
 
@@ -2089,15 +2095,22 @@ class WebSocket(_SpotWebSocket):
         :param symbol: the name of the contract
         :type symbol: str
         :param interval: the interval of the kline
-        :type interval: int
+        :type interval: str
 
         :return: None
         """
-        params = [dict(symbol=symbol, interval=interval)]
-        topic = "public.kline"
-        await self._ws_subscribe(topic, callback, params)
+        if isinstance(symbol, str):
+            symbols = [symbol]  # str
+        else:
+            symbols = symbol  # list
 
-    async def depth_stream(self, callback: Callable[..., None], symbol: str):
+        params_list = [dict(symbol = s, interval = interval) for s in symbols]
+
+        topic = "public.kline"
+        
+        await self._ws_subscribe(topic, callback, params_list)
+
+    async def public_aggre_depth_stream(self, callback: Callable[..., None], symbol: Union[str, List[str]], interval: Literal["10ms","100ms"]):
         """
         ### Diff.Depth Stream
         If the quantity is 0, it means that the order of the price has been cancel or traded,remove the price level.
@@ -2111,11 +2124,17 @@ class WebSocket(_SpotWebSocket):
 
         :return: None
         """
-        params = [dict(symbol=symbol)]
-        topic = "public.aggre.depth"
-        await self._ws_subscribe(topic, callback, params)
+        if isinstance(symbol, str):
+            symbols = [symbol]  # str
+        else:
+            symbols = symbol  # list
 
-    async def limit_depth_stream(self, callback: Callable[..., None], symbol: str, level: int):
+        params_list = [dict(symbol = s, interval = interval) for s in symbols]
+
+        topic = "public.aggre.depth"
+        await self._ws_subscribe(topic, callback, params_list)
+
+    async def public_limit_depth_stream(self, callback: Callable[..., None], symbol: Union[str, List[str]], level: Literal[5,10,20]):
         """
         ### Partial Book Depth Streams
         Top bids and asks, Valid are 5, 10, or 20.
@@ -2131,11 +2150,16 @@ class WebSocket(_SpotWebSocket):
 
         :return: None
         """
-        params = [dict(symbol=symbol, level=level)]
+        if isinstance(symbol, str):
+            symbols = [symbol]  # str
+        else:
+            symbols = symbol  # list
+        
+        params_list = [dict(symbol = s, level = level) for s in symbols]
         topic = "public.limit.depth"
-        await self._ws_subscribe(topic, callback, params)
+        await self._ws_subscribe(topic, callback, params_list)
 
-    async def book_ticker_stream(self, callback: Callable[..., None], symbol: str):
+    async def public_aggre_bookTicker_stream(self, callback: Callable[..., None], symbol: Union[str, List[str]]):
         """
         ### Individual Symbol Book Ticker Streams
         Pushes any update to the best bid or ask's price or quantity in real-time for a specified symbol.
@@ -2149,11 +2173,17 @@ class WebSocket(_SpotWebSocket):
 
         :return: None
         """
-        params = [dict(symbol=symbol)]
-        topic = "public.aggre.bookTicker"
-        await self._ws_subscribe(topic, callback, params)
+        if isinstance(symbol, str):
+            symbols = [symbol]  # str
+        else:
+            symbols = symbol  # list
+        
+        params_list = [dict(symbol = s) for s in symbols]
 
-    async def book_ticker_batch_stream(self, callback: Callable[..., None], symbols: List[str]):
+        topic = "public.aggre.bookTicker"
+        await self._ws_subscribe(topic, callback, params_list)
+
+    async def public_bookTicker_batch_stream(self, callback: Callable[..., None], symbol: Union[str, List[str]]):
         """
         ### Individual Symbol Book Ticker Streams (Batch Aggregation)
         This batch aggregation version pushes the best order information for a specified trading pair.
@@ -2167,9 +2197,15 @@ class WebSocket(_SpotWebSocket):
 
         :return: None
         """
-        params = [dict(symbol=symbol) for symbol in symbols]
+        if isinstance(symbol, str):
+            symbols = [symbol]  # str
+        else:
+            symbols = symbol  # list
+
+        params_list = [dict(symbol=s) for s in symbols]
+
         topic = "public.bookTicker.batch"
-        await self._ws_subscribe(topic, callback, params)
+        await self._ws_subscribe(topic, callback, params_list)
 
     # <=================================================================>
     #
@@ -2177,7 +2213,7 @@ class WebSocket(_SpotWebSocket):
     #
     # <=================================================================>
 
-    async def account_update(self, callback: Callable[..., None]):
+    async def private_account_update(self, callback: Callable[..., None]):
         """
         ### Spot Account Update
         The server will push an update of the account assets when the account balance changes.
@@ -2193,7 +2229,7 @@ class WebSocket(_SpotWebSocket):
         topic = "private.account"
         await self._ws_subscribe(topic, callback, params)
 
-    async def account_deals(self, callback: Callable[..., None]):
+    async def private_account_deals(self, callback: Callable[..., None]):
         """
         ### Spot Account Deals
 
@@ -2208,7 +2244,7 @@ class WebSocket(_SpotWebSocket):
         topic = "private.deals"
         await self._ws_subscribe(topic, callback, params)
 
-    async def account_orders(self, callback: Callable[..., None]):
+    async def private_account_orders(self, callback: Callable[..., None]):
         """
         ### Spot Account Orders
 

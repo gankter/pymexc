@@ -39,7 +39,7 @@ async def test_deals_stream(ws_client: WebSocket):
         if len(messages) >= 2:  # Get at least 2 messages
             await ws_client.unsubscribe("public.deals")
 
-    await ws_client.deals_stream(handle_message, "BTCUSDT")
+    await ws_client.public_deals_stream(handle_message, "BTCUSDT")
 
     # Wait for messages
     await asyncio.sleep(2)
@@ -62,7 +62,7 @@ async def test_kline_stream(ws_client: WebSocket):
         if len(messages) >= 2:  # Get at least 2 messages
             await ws_client.unsubscribe("public.kline")
 
-    await ws_client.kline_stream(handle_message, "BTCUSDT", "1m")
+    await ws_client.public_kline_stream(handle_message, "BTCUSDT", "1m")
 
     # Wait for messages
     await asyncio.sleep(2)
@@ -109,7 +109,7 @@ async def test_limit_depth_stream(ws_client: WebSocket):
         if len(messages) >= 2:  # Get at least 2 messages
             await ws_client.unsubscribe("public.limit.depth")
 
-    await ws_client.limit_depth_stream(handle_message, "BTCUSDT", 5)
+    await ws_client.public_limit_depth_stream(handle_message, "BTCUSDT", 5)
 
     # Wait for messages
     await asyncio.sleep(2)
@@ -134,7 +134,7 @@ async def test_book_ticker_stream(ws_client: WebSocket):
         if len(messages) >= 2:  # Get at least 2 messages
             await ws_client.unsubscribe("public.bookTicker")
 
-    await ws_client.book_ticker_stream(handle_message, "BTCUSDT")
+    await ws_client.public_book_ticker_stream(handle_message, "BTCUSDT")
 
     # Wait for messages
     await asyncio.sleep(2)
@@ -159,7 +159,7 @@ async def test_account_update(ws_client: WebSocket):
         if len(messages) >= 1:  # Get at least 1 message
             await ws_client.unsubscribe("private.account")
 
-    await ws_client.account_update(handle_message)
+    await ws_client.private_account_update(handle_message)
 
     # Wait for messages
     await asyncio.sleep(2)
@@ -181,7 +181,7 @@ async def test_account_deals(ws_client: WebSocket):
         if len(messages) >= 1:  # Get at least 1 message
             await ws_client.unsubscribe("private.deals")
 
-    await ws_client.account_deals(handle_message)
+    await ws_client.private_account_deals(handle_message)
 
     # Wait for messages
     await asyncio.sleep(2)
@@ -203,7 +203,7 @@ async def test_account_orders(ws_client: WebSocket):
         if len(messages) >= 1:  # Get at least 1 message
             await ws_client.unsubscribe("private.orders")
 
-    await ws_client.account_orders(handle_message)
+    await ws_client.private_account_orders(handle_message)
 
     # Wait for messages
     await asyncio.sleep(2)
@@ -253,8 +253,8 @@ async def test_multiple_subscriptions(ws_client: WebSocket):
             await ws_client.unsubscribe("public.deals", "public.bookTicker")
 
     # Subscribe to multiple streams
-    await ws_client.deals_stream(handle_message, "BTCUSDT")
-    await ws_client.book_ticker_stream(handle_message, "BTCUSDT")
+    await ws_client.public_deals_stream(handle_message, "BTCUSDT")
+    await ws_client.public_book_ticker_stream(handle_message, "BTCUSDT")
 
     # Wait for messages
     await asyncio.sleep(2)

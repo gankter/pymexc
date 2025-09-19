@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 
 
-def handle_message(msg: ProtoTyping.PublicAggreDealsV3Api):
+def handle_message(msg: ProtoTyping.PublicAggreDealsV3Api, wrapper_data):
     #pass
     print(msg)
     for deal in msg.deals:
@@ -38,7 +38,13 @@ def handle_message(msg: ProtoTyping.PublicAggreDealsV3Api):
 
 async def main():
     ws_client = spot.WebSocket(api_key=None, api_secret=None, proto=True)
-    await ws_client.deals_stream(handle_message, symbol="BTCUSDT", interval="100ms")
+    await ws_client.public_aggre_deals_stream(handle_message, symbol="BTCUSDT", interval="100ms")
+    await asyncio.sleep(5)
+    await ws_client.public_aggre_deals_stream(handle_message, symbol="ADAUSDT", interval="100ms")
+    await asyncio.sleep(5)
+    await ws_client.unsubscribe(ws_client.public_aggre_deals_stream, params_list = [dict(symbol="BTCUSDT", interval="100ms") ])
+    await asyncio.sleep(5)
+    await ws_client.unsubscribe(ws_client.public_aggre_deals_stream, params_list = [dict(symbol="ADAUSDT", interval="100ms") ] )
     #while True:
     #time.sleep(0.2)
     #pass
