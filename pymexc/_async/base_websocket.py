@@ -259,7 +259,7 @@ class _FuturesWebSocketManager(_AsyncWebSocketManager):
     async def unsubscribe(self, topic: str | Callable, params: Optional[dict] ) -> None:
 
         if isinstance(topic, str):
-            self._unsubscribe_one(self, topic, params, self.message_shaper_dict[topic])
+            self._unsubscribe_one( topic, params, self.message_shaper_dict[topic])
             await self.ws.send_json({"method": f"unsub.{topic}", "param": params})
             
             logger.debug(f"Unsubscribed from {topic}, params: {params}")
