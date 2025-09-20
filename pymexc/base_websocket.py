@@ -107,6 +107,7 @@ class _WebSocketManager:
 
         self.last_subsctiption: Union[str, None] = None
         self.ping_timer = None
+        self._default_callback = None#lambda : None
 
     @property
     def is_spot(self):
@@ -161,6 +162,7 @@ class _WebSocketManager:
                 return False
         except AttributeError:
             return False
+        
 
     def _connect(self, url):
         """
@@ -237,6 +239,9 @@ class _WebSocketManager:
 
         self.attempting_connection = False
 
+    def _set_default_callback(self,default_callback:Callable):
+        self._default_callback = default_callback
+    
     def _set_personal_callback(self, callback: Callable = None, topics: List[str] = FUTURES_PERSONAL_TOPICS):
         if callback:
             for topic in topics:
@@ -443,12 +448,12 @@ class _WebSocketManager:
         else:
             wrapper_data = None
         
-        callback_function = self._get_callback(topic)
+        callback_function = self._get_callback(topic) or self._default_callback
 
         if not callback_function:
             logger.warning(f"Callback for topic {topic} not found. | Message: {message}")
-            print(topic)
-            print(self.callback_directory)
+            #print(topic)
+            #print(self.callback_directory)
             return None, None, None
         else:
             if parse_only:
