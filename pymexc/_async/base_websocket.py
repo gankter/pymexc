@@ -70,15 +70,23 @@ class _AsyncWebSocketManager(_WebSocketManager):
         self.connected = False
         self.loop = loop or asyncio.get_event_loop()
         self.locker = asyncio.Lock()
-
         if ping_timeout:
             warnings.warn(
                 "ping_timeout is deprecated for async websockets, please use just ping_interval.",
             )
+            
+        self.chunk_size = 50
 
     async def _on_open(self):
         self.connected = True
         super()._on_open()
+        
+    async def _active_ping(self):
+        while self.connected:
+            await self.ws.send_str(self.custom_ping_message)
+            await asyncio.sleep(self.ping_interval)
+            
+    #async def _write(self):
 
     async def _loop_recv(self):
         try:
@@ -113,9 +121,22 @@ class _AsyncWebSocketManager(_WebSocketManager):
                 # because this is a brand new WSS initialisation so there was
                 # no previous WSS connection.
                 return
-
-            for subscription_message in self.subscriptions:
-                await self.ws.send_json(subscription_message)
+            
+            if len(self.subscriptions) > self.chunk_size:
+                result = [self.subscriptions[i:i + self.chunk_size]    
+                for i in range(0, len(self.subscriptions), self.chunk_size)]
+                
+                for chunk in result:
+                    
+                    await self.ws.send_json(
+                        {"method": "SUBSCRIPTION",
+                        "params": chunk})
+                    await asyncio.sleep(0.1)
+            else:
+                await self.ws.send_json(
+                    {"method": "SUBSCRIPTION",
+                    "params": self.subscriptions})
+                
 
         self.attempting_connection = True
 
@@ -372,6 +393,7 @@ class _SpotWebSocketManager(_AsyncWebSocketManager):
             "private.deals": lambda : [{}],
             "private.orders": lambda : [{}]
         }
+        self.chunk_size = 50
         super().__init__(callback_function, ws_name, **kwargs)
 
 

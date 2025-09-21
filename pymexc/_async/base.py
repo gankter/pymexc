@@ -41,7 +41,6 @@ class MexcSDK(ABC):
                 "Content-Type": "application/json",
             }
         )
-
         if proxies:
             self.session.proxies.update(proxies)
 
