@@ -197,6 +197,7 @@ class _AsyncWebSocketManager(_WebSocketManager):
         await self.ws.send_json(msg)
 
     async def _on_error(self, error: Exception):
+        print(error)
         super()._on_error(error, parse_only=True)
 
         # Reconnect.
