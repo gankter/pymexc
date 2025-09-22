@@ -73,12 +73,13 @@ class _AsyncWebSocketManager(_WebSocketManager):
         )
         self.connected = False
         self.loop = loop or asyncio.get_event_loop()
-        self.locker = asyncio.Lock()
+        self._locker = asyncio.Lock()
         if ping_timeout:
             warnings.warn(
                 "ping_timeout is deprecated for async websockets, please use just ping_interval.",
             )
-            
+        
+        
         self.chunk_size = 50
 
     async def _on_open(self):
@@ -94,12 +95,13 @@ class _AsyncWebSocketManager(_WebSocketManager):
 
     async def _loop_recv(self):
         try:
-            async for msg in self.ws:
-                if msg.type in [aiohttp.WSMsgType.TEXT, aiohttp.WSMsgType.BINARY]:
-                    await self._on_message(msg.data)
-                elif msg.type == aiohttp.WSMsgType.ERROR:
-                    await self._on_error(msg)
-                    break
+            async with self._locker:
+                async for msg in self.ws:
+                    if msg.type in [aiohttp.WSMsgType.TEXT, aiohttp.WSMsgType.BINARY]:
+                        await self._on_message(msg.data)
+                    elif msg.type == aiohttp.WSMsgType.ERROR:
+                        await self._on_error(msg)
+                        break
         finally:
             await self._on_close()
             await self.session.close()
