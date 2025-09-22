@@ -46,6 +46,8 @@ class _AsyncWebSocketManager(_WebSocketManager):
         loop=None,
         proto=False,
         extend_proto_body=False,
+        use_default_callback = False,
+        default_callback = None,
     ):
         super().__init__(
             callback_function,
@@ -66,6 +68,8 @@ class _AsyncWebSocketManager(_WebSocketManager):
             http_proxy_timeout=http_proxy_timeout,
             proto=proto,
             extend_proto_body=extend_proto_body,
+            use_default_callback=use_default_callback,
+            default_callback=default_callback,
         )
         self.connected = False
         self.loop = loop or asyncio.get_event_loop()
@@ -204,7 +208,7 @@ class _AsyncWebSocketManager(_WebSocketManager):
 
 
     async def _process_normal_message(self, message: dict, return_wrapper_data:bool): 
-        
+
         callback_function, callback_data, wrapper_data = super()._process_normal_message(message=message,
                                                                                          return_wrapper_data = return_wrapper_data,
                                                                                          parse_only=True)

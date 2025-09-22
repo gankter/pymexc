@@ -1936,6 +1936,8 @@ class WebSocket(_SpotWebSocket):
         loop: Optional[AbstractEventLoop] = None,
         proto: Optional[bool] = False,
         extend_proto_body: Optional[bool] = False,
+        use_default_callback=False,
+        default_callback=None,
     ):
         """
         Initializes the class instance with the provided arguments.
@@ -2007,6 +2009,8 @@ class WebSocket(_SpotWebSocket):
             loop=loop,
             proto=proto,
             extend_proto_body=extend_proto_body,
+            use_default_callback=use_default_callback,
+            default_callback=default_callback,
         )
         self.listenKey = listenKey
 
