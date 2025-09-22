@@ -109,45 +109,42 @@ class _AsyncWebSocketManager(_WebSocketManager):
 
     def is_connected(self):
         return self.connected
+    
+    async def resubscribe_to_topics(self):
+        if not self.subscriptions:
+            # There are no subscriptions to resubscribe to, probably
+            # because this is a brand new WSS initialisation so there was
+            # no previous WSS connection.
+            return
+        
+        if len(self.subscriptions) > self.chunk_size:
+            result = [self.subscriptions[i:i + self.chunk_size]    
+            for i in range(0, len(self.subscriptions), self.chunk_size)]
+            
+            for chunk in result:
+                
+                await self.ws.send_json(
+                    {"method": "SUBSCRIPTION",
+                    "params": chunk})
+                await asyncio.sleep(0.1)
+        else:
+            await self.ws.send_json(
+                {"method": "SUBSCRIPTION",
+                "params": self.subscriptions})
 
     async def _connect(self, url):
         """
         Open websocket in a thread.
         """
 
-        async def resubscribe_to_topics():
-            if not self.subscriptions:
-                # There are no subscriptions to resubscribe to, probably
-                # because this is a brand new WSS initialisation so there was
-                # no previous WSS connection.
-                return
-            
-            if len(self.subscriptions) > self.chunk_size:
-                result = [self.subscriptions[i:i + self.chunk_size]    
-                for i in range(0, len(self.subscriptions), self.chunk_size)]
-                
-                for chunk in result:
-                    
-                    await self.ws.send_json(
-                        {"method": "SUBSCRIPTION",
-                        "params": chunk})
-                    await asyncio.sleep(0.1)
-            else:
-                await self.ws.send_json(
-                    {"method": "SUBSCRIPTION",
-                    "params": self.subscriptions})
-                
-
         self.attempting_connection = True
 
         self.endpoint = url
 
         # Attempt to connect for X seconds.
-        retries = self.retries
-        if retries == 0:
-            infinitely_reconnect = True
-        else:
-            infinitely_reconnect = False
+        retries = self.retries if self.retries > 0 else 0
+        infinitely_reconnect = retries == 0
+
 
         while (infinitely_reconnect or retries > 0) and not self.is_connected():
             logger.info(f"WebSocket {self.ws_name} attempting connection...")
@@ -183,7 +180,7 @@ class _AsyncWebSocketManager(_WebSocketManager):
         if self.api_key and self.api_secret:
             await self._auth()
 
-        await resubscribe_to_topics()
+        #await resubscribe_to_topics()
 
         self.attempting_connection = False
 
@@ -207,6 +204,7 @@ class _AsyncWebSocketManager(_WebSocketManager):
 
 
     async def _process_normal_message(self, message: dict, return_wrapper_data:bool): 
+        
         callback_function, callback_data, wrapper_data = super()._process_normal_message(message=message,
                                                                                          return_wrapper_data = return_wrapper_data,
                                                                                          parse_only=True)
@@ -289,8 +287,34 @@ class _FuturesWebSocketManager(_AsyncWebSocketManager):
             topic_name = topic.__name__.replace("_stream", "").replace("_", ".")
 
             return await self.unsubscribe(topic_name,param=params)
+        
 
-    async def _process_auth_message(self, message: dict):
+    def _process_subscription_message(self, message: dict):
+        print(message)
+        if message.get("id") == 0 and message.get("code") == 0:
+            # If we get successful SPOT subscription, notify user
+            logger.debug(f"Subscription to {message['msg']} successful.")
+            return
+
+        elif (
+            message.get("channel", "").startswith("rs.sub")
+            or message.get("channel", "") == "rs.personal.filter"
+            and message.get("data") == "success"
+        ):
+            # If we get successful FUTURES subscription, notify user
+            logger.debug(f"Subscription to {message['channel']} successful.")
+            return
+
+        else:
+            # SPOT or FUTURES subscription fail
+            response = message.get("msg") or message.get("data")
+
+            logger.error(f"Couldn't subscribe to topic. Error: {response}.")
+            if self.last_subsctiption:
+                self._pop_callback(self.last_subsctiption)
+
+
+    def _process_auth_message(self, message: dict):
         # If we get successful futures auth, notify user
         if message.get("data") == "success":
             logger.debug(f"Authorization for {self.ws_name} successful.")
@@ -314,7 +338,7 @@ class _FuturesWebSocketManager(_AsyncWebSocketManager):
             return message.get("channel", "") == "rs.error"
 
         if is_auth_message():
-            await self._process_auth_message(message)
+            self._process_auth_message(message)
         elif is_subscription_message():
             self._process_subscription_message(message)
         elif is_pong_message():
@@ -474,6 +498,7 @@ class _SpotWebSocketManager(_AsyncWebSocketManager):
             return await self.unsubscribe(str_topic_short, params_list)
 
     async def _handle_incoming_message(self, message):
+
         def is_subscription_message():
             if message.get("id") == 0 and message.get("code") == 0 and message.get("msg"):
                 return True

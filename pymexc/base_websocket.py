@@ -50,6 +50,8 @@ class _WebSocketManager:
         http_proxy_timeout=None,
         proto=False,
         extend_proto_body=False,
+        use_default_callback = False,
+        default_callback = None,
     ):
         # Set API keys.
         self.api_key: Union[str, None] = api_key
@@ -107,7 +109,8 @@ class _WebSocketManager:
 
         self.last_subsctiption: Union[str, None] = None
         self.ping_timer = None
-        self._default_callback = None#lambda : None
+        self.use_default_callback = use_default_callback
+        self._default_callback = default_callback #lambda : None
 
     @property
     def is_spot(self):
@@ -448,7 +451,8 @@ class _WebSocketManager:
         else:
             wrapper_data = None
         
-        callback_function = self._get_callback(topic) or self._default_callback
+        
+        callback_function =  self._default_callback if self.use_default_callback else self._get_callback(topic) or self._default_callback
 
         if not callback_function:
             logger.warning(f"Callback for topic {topic} not found. | Message: {message}")
