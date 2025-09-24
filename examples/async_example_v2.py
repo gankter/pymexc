@@ -20,7 +20,7 @@ async def main():
 
     ws_client = WebSocket(api_key=None, api_secret=None, proto=True, loop = event_loop, use_common_callback = True, commn_callback = handle_message)
     #await ws_client.connect()
-    await asyncio.gather(ws_client.connect(), ws_client.public_aggre_deals_stream(symbol="BTCUSDT",interval="100ms"))
+    await asyncio.gather(ws_client.connect(), ws_client.public_aggre_deals_stream(symbol="MLCUSDT",interval="100ms"))
     while True:
         try:
             await asyncio.sleep(0.1)

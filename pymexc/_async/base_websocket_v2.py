@@ -27,13 +27,26 @@ SPOT_AVALIABLE_TOPICS = Literal[
     "private.deals",
     "private.orders"]
 
-class _MessageParser:
+class _SpotMessageParser:
+    
+    def _topic(self, topic:str):
+        return (
+            topic.replace("sub.", "")
+            .replace("push.", "")
+            .replace("rs.sub.", "")
+            .replace("spot@", "")
+            .replace(".pb", "")
+            .split(".v3.api")[0]
+        )
+        
     def _is_auth_message(self,message:dict):
-        print(message)
         return message.get("channel", "") == "rs.login"
 
-    def _is_subscription_message(self,message:dict):
-        return message.get("channel", "").startswith("rs.sub") or message.get("channel", "") == "rs.personal.filter"
+    def _is_subscription_message(self, message:dict):
+        if message.get("id") == 0 and message.get("code") == 0 and message.get("msg"):
+            return True
+        else:
+            return False
 
     def _is_pong_message(self,message:dict):
         return message.get("msg", "") in ("pong", "clientId","PONG")
@@ -41,7 +54,7 @@ class _MessageParser:
     def _is_error_message(self,message:dict):
         return message.get("channel", "") == "rs.error"
 
-class _AsyncWebSocketManagerV2:
+class _AsyncWebSocketManagerV2(_SpotMessageParser):
     
     def __init__(self,
                  base_callback = None,
@@ -80,16 +93,6 @@ class _AsyncWebSocketManagerV2:
     def _pop_callback(self, topic: str) -> Union[Callable[..., None], None]:
         return self.callback_directory.pop(topic) if self.callback_directory.get(topic) else None
     
-    def _topic(self, topic:str):
-        return (
-            topic.replace("sub.", "")
-            .replace("push.", "")
-            .replace("rs.sub.", "")
-            .replace("spot@", "")
-            .replace(".pb", "")
-            .split(".v3.api")[0]
-        )
-
     def get_proto_body(self, message: ProtoTyping.PushDataV3ApiWrapper) -> dict:
         if self.extend_proto_body:
             return message
@@ -308,10 +311,8 @@ class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
         
         if not topic in self.set_avaliable_topics:
             raise ValueError("unknow topic name")
-        
-        print(topic)
+    
         subscription_args_params = [self._subscribe_one(callback, params, self.message_shaper_dict[topic]) for params in params_list ]
-        print(subscription_args_params)
         subscription_args = {
             "method": "SUBSCRIPTION",
             "params": subscription_args_params,
@@ -331,13 +332,7 @@ class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
                 "params": unsub_args_params,
             }
         ))
-    
-    def _is_subscription_message(self, message):
-            if message.get("id") == 0 and message.get("code") == 0 and message.get("msg"):
-                return True
-            else:
-                return False
-            
+
     def _process_subscription_message(self,message):
         print(f"sub: {message}")
         pass
