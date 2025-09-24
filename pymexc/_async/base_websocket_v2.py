@@ -270,12 +270,13 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
 
 class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
 
-    def __init__(self, base_callback=None, ping_interval=20, loop=None, proto=False,**kwargs):
+    def __init__(self, base_callback=None, ping_interval=20, loop=None, proto=False,common_callback = None, **kwargs):
 
         super().__init__(base_callback = base_callback or self._handle_message,
                          ping_interval = ping_interval, 
                          loop = loop, 
                          proto = proto,
+                         common_callback = common_callback
                          **kwargs)
         
         self.set_avaliable_topics = set(get_args(SPOT_AVALIABLE_TOPICS))
@@ -357,12 +358,13 @@ class _SpotWebSocket(_SpotWebSocketManager):
         api_key: str = None,
         api_secret: str = None,
         loop: asyncio.AbstractEventLoop = None,
+        common_callback = None,
         **kwargs,
     ):
         self.ws_name = "SpotV3"
         self.endpoint = endpoint
         loop = loop or asyncio.get_event_loop()
-        super().__init__(loop = loop, **kwargs)
+        super().__init__(loop = loop, common_callback = common_callback, **kwargs)
 
     async def connect(self):
         await self._connect(self.endpoint)
