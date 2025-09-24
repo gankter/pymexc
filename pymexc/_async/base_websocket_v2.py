@@ -9,12 +9,37 @@ import ssl
 from aiolimiter import AsyncLimiter
 from typing import Callable, Union, Literal, get_args
 from websockets.exceptions import WebSocketException
-from pymexc.proto import ProtoTyping, PublicSpotKlineV3Api, PushDataV3ApiWrapper
+from pymexc.proto import ProtoTyping, PushDataV3ApiWrapper
 
 logger = logging.getLogger(__name__)
 
 SPOT = "wss://wbs-api.mexc.com/ws"
 FUTURES = "wss://contract.mexc.com/edge"
+
+SPOT_AVALIABLE_TOPICS = Literal[
+    "public.aggre.deals",
+    "public.kline",
+    "public.aggre.depth",
+    "public.limit.depth",
+    "public.aggre.bookTicker",
+    "public.bookTicker.batch",
+    "private.account",
+    "private.deals",
+    "private.orders"]
+
+class _MessageParser:
+    def _is_auth_message(self,message:dict):
+        print(message)
+        return message.get("channel", "") == "rs.login"
+
+    def _is_subscription_message(self,message:dict):
+        return message.get("channel", "").startswith("rs.sub") or message.get("channel", "") == "rs.personal.filter"
+
+    def _is_pong_message(self,message:dict):
+        return message.get("msg", "") in ("pong", "clientId","PONG")
+
+    def _is_error_message(self,message:dict):
+        return message.get("channel", "") == "rs.error"
 
 class _AsyncWebSocketManagerV2:
     
@@ -25,11 +50,12 @@ class _AsyncWebSocketManagerV2:
                  ping_interval = 20,
                  loop = None,
                  proto = False,
-                 sending_limiter:AsyncLimiter = None
+                 sending_limiter:AsyncLimiter = None,
+                 extend_proto_body = False
                  ) -> None:
  
-        self._sending_limiter = sending_limiter or AsyncLimiter(max_rate = 100, time_period = 1)
-        self.base_callback = base_callback or self._handle_message
+        
+        self.base_callback = base_callback 
         self.use_common_callback = use_common_callback
         self._commn_callback = commn_callback
         self.ping_interval = ping_interval
@@ -38,7 +64,8 @@ class _AsyncWebSocketManagerV2:
         self.connected = False
         self.event_loop:asyncio.AbstractEventLoop = loop
         self.proto = proto
-        self.extend_proto_body = True
+        self._sending_limiter = sending_limiter or AsyncLimiter(max_rate = 100, time_period = 1)
+        self.extend_proto_body = extend_proto_body
         self.callback_directory = dict()
 
         self._sending_queue = asyncio.Queue()
@@ -52,12 +79,22 @@ class _AsyncWebSocketManagerV2:
 
     def _pop_callback(self, topic: str) -> Union[Callable[..., None], None]:
         return self.callback_directory.pop(topic) if self.callback_directory.get(topic) else None
+    
+    def _topic(self, topic:str):
+        return (
+            topic.replace("sub.", "")
+            .replace("push.", "")
+            .replace("rs.sub.", "")
+            .replace("spot@", "")
+            .replace(".pb", "")
+            .split(".v3.api")[0]
+        )
 
     def get_proto_body(self, message: ProtoTyping.PushDataV3ApiWrapper) -> dict:
         if self.extend_proto_body:
             return message
 
-        topic = message.channel
+        topic = self._topic(message.channel)
         bodies = {
             "public.kline": "publicSpotKline",
             "public.deals": "publicDeals",
@@ -96,29 +133,31 @@ class _AsyncWebSocketManagerV2:
 
         if parse_only:
             return _message
-        #print(self.callback)
+
         await self.base_callback(_message)
         
     async def _on_error(self):
         pass
 
-    async def write(self,message):
-        await self._sending_queue.put(message)
+    def write(self,message):
+        self._sending_queue.put_nowait(message)
 
     async def _write(self,conn: websockets.ClientConnection):
-
+        print(f"задача _write начата")  
         while True:
             msg = await self._sending_queue.get()
-            async with self._sending_limiter:
-                await conn.send(msg)
+            #async with self._sending_limiter:
+            await conn.send(msg)
 
     async def _active_ping(self,conn: websockets.ClientConnection):
+        print(f"задача _active_ping начата")  
         while True:
             await conn.send(self._ping_message)
             await asyncio.sleep(self.ping_interval)
                 
 
-    async def _read(self, conn: websockets.ClientConnection):      
+    async def _read(self, conn: websockets.ClientConnection):
+        print(f"задача _read начата")      
         try:
             async for msg in conn:
                 await self._on_message(msg, parse_only = False) 
@@ -146,46 +185,15 @@ class _AsyncWebSocketManagerV2:
             await conn.send(json.dumps(
                 {"method": "SUBSCRIPTION",
                 "params": self.subscriptions}))
-                
-    def _is_auth_message(self,message:dict):
-            return message.get("channel", "") == "rs.login"
-
-    def _is_subscription_message(self,message:dict):
-        return message.get("channel", "").startswith("rs.sub") or message.get("channel", "") == "rs.personal.filter"
-
-    def _is_pong_message(self,message:dict):
-        return message.get("msg", "") in ("pong", "clientId","PONG")
-
-    def _is_error_message(self,message:dict):
-        return message.get("channel", "") == "rs.error"
-
-    async def _handle_message(self, message: dict):
-        print(message)
-        if self._is_auth_message(message):
-            self._process_auth_message(message)
-        elif self._is_subscription_message(message):
-            self._process_subscription_message(message)
-        elif self._is_pong_message(message):
-            pass
-        elif self._is_error_message(message):
-            print(f"WebSocket return error: {message}")
-        else:
-            await self._process_normal_message(message, return_wrapper_data = False)
-
-    async def _process_subscription_message(self, message):
-        print(f"подпеська {message}")
-
-    async def _process_auth_message(self, message):
-        pass
 
     async def _process_normal_message(self, message: dict | ProtoTyping.PushDataV3ApiWrapper, parse_only: bool = True, return_wrapper_data = True):
         """
         Redirect message to callback function
         """
-
+        print(f"_process_normal_message: {message}")
         if isinstance(message, dict):
             
-            topic:str = message.get("channel") or message.get("c")# if not full_topic else (message.get("channel") or message.get("c"))
+            topic:str = message.get("channel") or message.get("c") or message.get("msg")# if not full_topic else (message.get("channel") or message.get("c"))
             topic = topic.replace("push.","")
             return_wrapper_data = False
             callback_data = message
@@ -205,8 +213,6 @@ class _AsyncWebSocketManagerV2:
 
         if not callback_function:
             logger.warning(f"Callback for topic {topic} not found. | Message: {message}")
-            #print(topic)
-            #print(self.callback_directory)
             return None, None, None
         else:
             if parse_only:
@@ -218,17 +224,18 @@ class _AsyncWebSocketManagerV2:
         stopped = False
         retried = 0
         self.endpoint = url
-        print("подключаюсь")
+
         while not stopped:
             try:
-                ctx = None
+                #ctx = None
                 print(self.endpoint)
                 #if self.endpoint.startswith('wss://'):
                 ctx = ssl.create_default_context()
                 #f not self.cfg.verify:
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
-                conn = await websockets.connect(self.endpoint, compression=None, proxy=None)
+                #ctx.check_hostname = False
+                #ctx.verify_mode = ssl.CERT_NONE
+                conn = await websockets.connect(self.endpoint, ssl=ctx ,compression=None, proxy=None)
+                #await conn.send(json.dumps({"method": "SUBSCRIPTION", "params": ["spot@public.aggre.deals.v3.api.pb@100ms@BTCUSDT"]}))
             except (WebSocketException, ConnectionRefusedError, OSError) as e:
 
                 logger.warning("failed to connect to server for the %d time, try again later: %s", retried + 1, e)
@@ -236,13 +243,14 @@ class _AsyncWebSocketManagerV2:
                 await asyncio.sleep(0.5 * retried)
 
             else:
+                print("Подключилось")
                 self.connected = True
                 tasks: list[asyncio.Task] = list()
                 try:
-                    tasks.append(self.event_loop.create_task(self._write(conn)))
-                    tasks.append(self.event_loop.create_task(self._read(conn)))
-                    tasks.append(self.event_loop.create_task(self._active_ping(conn)))
-                    self.main_loop = asyncio.gather(*tasks)
+                    #tasks.append(self.event_loop.create_task()
+                    #tasks.append(self.event_loop.create_task()
+                    #tasks.append(self.event_loop.create_task(self._active_ping(conn)))
+                    self.main_loop = asyncio.gather(self._write(conn), self._read(conn), self._active_ping(conn))
                     await self.main_loop
                 except websockets.ConnectionClosed:
                     logger.warning("websocket connection lost, retry to reconnect")
@@ -256,20 +264,17 @@ class _AsyncWebSocketManagerV2:
 
 
 
-SPOT_AVALIABLE_TOPICS = Literal["public.aggre.deals",
-                    "public.kline",
-                    "public.aggre.depth",
-                    "public.limit.depth",
-                    "public.aggre.bookTicker",
-                    "public.bookTicker.batch",
-                    "private.account",
-                    "private.deals",
-                    "private.orders"]
 
 class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
 
-    def __init__(self, base_callback=None, ping_interval=20, loop=None, proto=False,):
-        super().__init__(base_callback = base_callback, ping_interval=ping_interval, loop=loop, proto=proto)
+    def __init__(self, base_callback=None, ping_interval=20, loop=None, proto=False,**kwargs):
+
+        super().__init__(base_callback = base_callback or self._handle_message,
+                         ping_interval = ping_interval, 
+                         loop = loop, 
+                         proto = proto,
+                         **kwargs)
+        
         self.set_avaliable_topics = set(get_args(SPOT_AVALIABLE_TOPICS))
         self.message_shaper_dict = {
             "public.aggre.deals": lambda params: f"spot@public.aggre.deals.v3.api{(".pb" if self.proto else "")}@{params['interval']}@{params['symbol']}",
@@ -303,6 +308,7 @@ class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
         
         if not topic in self.set_avaliable_topics:
             raise ValueError("unknow topic name")
+        
         print(topic)
         subscription_args_params = [self._subscribe_one(callback, params, self.message_shaper_dict[topic]) for params in params_list ]
         print(subscription_args_params)
@@ -311,7 +317,7 @@ class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
             "params": subscription_args_params,
         }
         await asyncio.sleep(0.1)
-        await self.write(json.dumps(subscription_args))
+        self.write(json.dumps(subscription_args))
 
     async def unsubscribe(self, topic: SPOT_AVALIABLE_TOPICS, params_list:list[dict]):
 
@@ -319,12 +325,29 @@ class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
             raise ValueError("unknow topic name")
         
         unsub_args_params = [self._unsubscribe_one(topic, params, self.message_shaper_dict[topic]) for params in params_list ]
-        await self.write(json.dumps(
+        self.write(json.dumps(
             {
                 "method": "UNSUBSCRIPTION",
                 "params": unsub_args_params,
             }
         ))
+    
+    def _is_subscription_message(self, message):
+            if message.get("id") == 0 and message.get("code") == 0 and message.get("msg"):
+                return True
+            else:
+                return False
+            
+    def _process_subscription_message(self,message):
+        print(f"sub: {message}")
+        pass
+
+    async def _handle_message(self, message):
+
+        if isinstance(message, dict) and self._is_subscription_message(message):
+            self._process_subscription_message(message)
+        else:
+            await self._process_normal_message(message, return_wrapper_data = True)
 
             
         
@@ -339,21 +362,25 @@ class _SpotWebSocket(_SpotWebSocketManager):
         api_key: str = None,
         api_secret: str = None,
         loop: asyncio.AbstractEventLoop = None,
-        base_callback:Callable = None,
         **kwargs,
     ):
         self.ws_name = "SpotV3"
         self.endpoint = endpoint
         loop = loop or asyncio.get_event_loop()
-        super().__init__(proto=True,
-                         loop = loop, **kwargs)
+        super().__init__(loop = loop, **kwargs)
+
+    async def connect(self):
+        await self._connect(self.endpoint)
 
     async def _ws_subscribe(self, topic:SPOT_AVALIABLE_TOPICS, params_list: list[dict], callback = None):
-        
-        if not self.connected:
-            await self._connect(SPOT)
-            await asyncio.sleep(1)
 
+        if not self.connected:
+            print("подключаюсь")
+            #raise ValueError("Не подключено")
+            await self._connect(self.endpoint)
+            await asyncio.sleep(0.1)
+            
+        print(f"отправляю топик {topic}")
         await self.subscribe(topic, callback, params_list)
 
     

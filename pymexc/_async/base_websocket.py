@@ -522,8 +522,8 @@ class _SpotWebSocketManager(_AsyncWebSocketManager):
 
 
 class _SpotWebSocket(_SpotWebSocketManager):
-    listenKey: str
-    http: "HTTP"
+    #listenKey: str
+    #http: "HTTP"
 
     def __init__(
         self,
@@ -537,11 +537,7 @@ class _SpotWebSocket(_SpotWebSocketManager):
         self.endpoint = endpoint
         loop = loop or asyncio.get_event_loop()
 
-        
-
-        super().__init__(self.ws_name, api_key=api_key, api_secret=api_secret, loop=loop, **kwargs)
-    
-        
+        super().__init__(self.ws_name,loop=loop, **kwargs)
 
     async def _ws_subscribe(self, topic, callback, params_list: list[dict]):
         # Можно сюда передать функцию - формирователь сообщения
