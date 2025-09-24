@@ -146,21 +146,21 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
         self._sending_queue.put_nowait(message)
 
     async def _write(self,conn: websockets.ClientConnection):
-        print(f"задача _write начата")  
+        logger.debug(f"задача _write начата")  
         while True:
             msg = await self._sending_queue.get()
             #async with self._sending_limiter:
             await conn.send(msg)
 
     async def _active_ping(self,conn: websockets.ClientConnection):
-        print(f"задача _active_ping начата")  
+        logger.debug(f"задача _active_ping начата")  
         while True:
             await conn.send(self._ping_message)
             await asyncio.sleep(self.ping_interval)
                 
 
     async def _read(self, conn: websockets.ClientConnection):
-        print(f"задача _read начата")      
+        logger.debug(f"задача _read начата")      
         try:
             async for msg in conn:
                 await self._on_message(msg, parse_only = False) 
@@ -193,7 +193,7 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
         """
         Redirect message to callback function
         """
-        print(f"_process_normal_message: {message}")
+        logger.debug(f"_process_normal_message: {message}")
         if isinstance(message, dict):
             
             topic:str = message.get("channel") or message.get("c") or message.get("msg")# if not full_topic else (message.get("channel") or message.get("c"))
@@ -231,7 +231,7 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
         while not stopped:
             try:
                 #ctx = None
-                print(self.endpoint)
+                logger.debug(self.endpoint)
                 #if self.endpoint.startswith('wss://'):
                 ctx = ssl.create_default_context()
                 #f not self.cfg.verify:
@@ -246,7 +246,7 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
                 await asyncio.sleep(0.5 * retried)
 
             else:
-                print("Подключилось")
+                logger.debug("Подключилось")
                 self.connected = True
                 tasks: list[asyncio.Task] = list()
                 try:
