@@ -1,16 +1,18 @@
 
 
 
-
+import asyncio
 import hashlib
 import hmac
 import logging
 import time
 from abc import ABC
+import pandas as pd
 from typing import Literal, Union
 from urllib.parse import urlencode
 
 from curl_cffi import requests
+from curl_cffi.requests import BrowserType
 
 
 WEB_ENDPOINT = "https://www.mexc.com/api"
@@ -61,7 +63,7 @@ class WebHTTP:
         pass
 
 
-class SpotHTTP(_WebHTTP):
+class SpotHTTP(WebHTTP):
     def __init__(self, api_key: str = None, api_secret: str = None, proxies: dict = None):
         super().__init__(api_key, api_secret, SPOT, proxies=proxies)
 
@@ -123,5 +125,19 @@ class SpotHTTP(_WebHTTP):
         return response.json()
     
     
+async def main():
+    async with requests.AsyncSession(impersonate = BrowserType.chrome136,  # Имитация браузера
+        timeout=30,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        }) as session:
+        
+        result = await session.get("https://www.mexc.com/api/platform/spot/market-v2/web/symbolsV2")
+        data_dict = result.json()
+        
+        print(pd.DataFrame(data_dict['data']['symbols']['usdt'.upper()]))
+        
+        
+        
 if __name__ == "__main__":
-    
+    asyncio.run(main())
