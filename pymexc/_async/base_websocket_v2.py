@@ -72,9 +72,10 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
         self.use_common_callback = use_common_callback
         self._commn_callback = commn_callback
         self.ping_interval = ping_interval
+        self.retries = 10
         self.subscriptions = []
         self.chunk_size = 50
-        self.connected = False
+        self._connected = False
         self.event_loop:asyncio.AbstractEventLoop = loop
         self.proto = proto
         self._sending_limiter = sending_limiter or AsyncLimiter(max_rate = 100, time_period = 1)
@@ -120,7 +121,7 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
             return message
 
     async def _on_open(self):
-        self.connected = True
+        self._connected = True
         
     async def _on_message(self, message: str, parse_only: bool):
         """
@@ -224,21 +225,20 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
             callback_function(callback_data,wrapper_data)
     
     async def _connect(self, url):
-        stopped = False
+        
         retried = 0
         self.endpoint = url
 
-        while not stopped:
+        retries = self.retries if self.retries > 0 else 0
+        infinitely_reconnect = retries == 0
+        
+        while (infinitely_reconnect or retries > 0):
             try:
                 #ctx = None
                 logger.debug(self.endpoint)
-                #if self.endpoint.startswith('wss://'):
                 ctx = ssl.create_default_context()
-                #f not self.cfg.verify:
-                #ctx.check_hostname = False
-                #ctx.verify_mode = ssl.CERT_NONE
-                conn = await websockets.connect(self.endpoint, ssl=ctx ,compression=None, proxy=None)
-                #await conn.send(json.dumps({"method": "SUBSCRIPTION", "params": ["spot@public.aggre.deals.v3.api.pb@100ms@BTCUSDT"]}))
+                conn = await websockets.connect(self.endpoint, ssl=ctx ,compression=None, proxy = None)
+                
             except (WebSocketException, ConnectionRefusedError, OSError) as e:
 
                 logger.warning("failed to connect to server for the %d time, try again later: %s", retried + 1, e)
@@ -247,19 +247,21 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
 
             else:
                 logger.debug("Подключилось")
-                self.connected = True
+                self._connected = True
                 tasks: list[asyncio.Task] = list()
+
                 try:
-                    #tasks.append(self.event_loop.create_task()
-                    #tasks.append(self.event_loop.create_task()
-                    #tasks.append(self.event_loop.create_task(self._active_ping(conn)))
-                    self.main_loop = asyncio.gather(self._write(conn), self._read(conn), self._active_ping(conn))
+                    tasks.append(self.event_loop.create_task(self._read(conn)))
+                    tasks.append(self.event_loop.create_task(self._write(conn)))
+                    tasks.append(self.event_loop.create_task(self._active_ping(conn)))
+                    tasks.append(self.event_loop.create_task(self.resubscribe_to_topics(conn=conn)))
+                    self.main_loop = asyncio.gather(*tasks)
                     await self.main_loop
                 except websockets.ConnectionClosed:
                     logger.warning("websocket connection lost, retry to reconnect")
                 except asyncio.CancelledError:
                     await conn.close()
-                    stopped = True
+                    self._connected = False
                 finally:
                     # user callback tasks are not our concern
                     for task in tasks:
@@ -371,7 +373,7 @@ class _SpotWebSocket(_SpotWebSocketManager):
 
     async def _ws_subscribe(self, topic:SPOT_AVALIABLE_TOPICS, params_list: list[dict], callback = None):
 
-        if not self.connected:
+        if not self._connected:
             print("подключаюсь")
             #raise ValueError("Не подключено")
             await self._connect(self.endpoint)
