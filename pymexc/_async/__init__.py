@@ -71,4 +71,4 @@ if os.name == "nt":
     """
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-__all__ = ["futures", "spot", "base_websocket_v2"]
+__all__ = ["futures", "spot", "base_websocket_v2","web"]
