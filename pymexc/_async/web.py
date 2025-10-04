@@ -21,12 +21,22 @@ class WebHTTP:
     
     def __init__(self) -> None:
         
-        self.session = requests.AsyncSession()
+        self.session = requests.AsyncSession(impersonate = BrowserType.chrome136,  # Имитация браузера
+            timeout=30,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0 Safari/537.36"
+            })
+        
         self.session.headers.update(
             {
                 "Content-Type": "application/json",
             }
         )
+        self.web_event_loop = asyncio.get_event_loop()
+        
+    def __del__(self):
+        self.web_event_loop.create_task(self.session.close())
+        self.web_event_loop.close()
     
     # https://www.mexc.com/api/platform/asset/api/asset/spot/currency/v3?currency=TMX 
     # https://www.mexc.com/api/platform/spot/market-v2/web/symbolsV2
@@ -48,19 +58,29 @@ class WebHTTP:
             kwargs["params"] = {}
 
         timestamp = str(int(time.time() * 1000))
-        kwargs["params"]["timestamp"] = timestamp
-        kwargs["params"]["recvWindow"] = self.recvWindow
+        #kwargs["params"]["timestamp"] = timestamp
+        #kwargs["params"]["recvWindow"] = self.recvWindow
 
-        kwargs["params"] = {k: v for k, v in sorted(kwargs["params"].items())}
-        params = kwargs.pop("params")
+        #kwargs["params"] = {k: v for k, v in sorted(kwargs["params"].items())}
+        #params = kwargs.pop("params")
 
-        response = await self.session.request(method, f"{self.base_url}{router}", params=params, *args, **kwargs)
+        response = await self.session.request(method, f"{self.base_url}{router}", params = params, *args, **kwargs)
 
         return response.json()
     
     
-    async def symbols_info_v2():
-        pass
+    async def symbols_info_v2(self,settle:str):
+        
+        if self.session._closed:
+            raise ValueError("session is not opened")
+        
+        #async with self.session as session:
+        await asyncio.sleep(5)
+        result = await self.session.get("https://www.mexc.com/api/platform/spot/market-v2/web/symbolsV2")
+        data_dict = result.json()
+            
+        return pd.DataFrame(data_dict['data']['symbols'][settle.upper()])
+
 
 
 class SpotHTTP(WebHTTP):
