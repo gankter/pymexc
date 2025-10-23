@@ -371,6 +371,13 @@ class _SpotWebSocket(_SpotWebSocketManager):
     async def connect(self):
         await self._connect(self.endpoint)
 
+    async def connect(self):
+        self.connection_task = self.event_loop.create_task(self._connect(self.endpoint)) 
+
+    async def disconnect(self):
+        self.connection_task.cancel()
+        await asyncio.sleep(0.2)
+
     async def _ws_subscribe(self, topic:SPOT_AVALIABLE_TOPICS, params_list: list[dict], callback = None):
 
         if not self._connected:
