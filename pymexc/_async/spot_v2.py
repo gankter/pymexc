@@ -45,13 +45,14 @@ logger = logging.getLogger(__name__)
     #from pymexc._async.base import _SpotHTTP, SPOT as SPOT_HTTP
 from pymexc._async.base_websocket_v2 import _SpotWebSocket, SPOT as SPOT_WS
 
+from pymexc.models.proxy import ProxySettings
+from pymexc.models.api_auth import ApiAuth
 
 
 class WebSocket(_SpotWebSocket):
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
+        api_auth: ApiAuth = None,
         listenKey: Optional[str] = None,
         #ping_interval: Optional[int] = 20,
         #ping_timeout: Optional[int] = None,
@@ -63,6 +64,7 @@ class WebSocket(_SpotWebSocket):
         #http_no_proxy: Optional[list] = None,
         #http_proxy_auth: Optional[tuple] = None,
         #http_proxy_timeout: Optional[int] = None,
+        proxy_settings:ProxySettings = None,
         loop: Optional[AbstractEventLoop] = None,
         proto: Optional[bool] = False,
         extend_proto_body: Optional[bool] = False,
@@ -148,7 +150,7 @@ class WebSocket(_SpotWebSocket):
 
         # for keep alive connection to private spot websocket
         # need to send listen key at connection and send keep-alive request every 60 mins
-        if api_key and api_secret:
+        if api_auth.api_key and api_auth.api_secret:
             # setup keep-alive connection loop
             loop.create_task(self._keep_alive_loop())
 

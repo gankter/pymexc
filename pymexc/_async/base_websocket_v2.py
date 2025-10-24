@@ -6,8 +6,9 @@ import websockets
 import logging
 import ssl
 
+from abc import ABC,abstractmethod
 from aiolimiter import AsyncLimiter
-from typing import Callable, Union, Literal, get_args
+from typing import Awaitable, Callable, Union, Literal, get_args
 from websockets.exceptions import WebSocketException
 from pymexc.proto import ProtoTyping, PushDataV3ApiWrapper
 
@@ -29,7 +30,8 @@ SPOT_AVALIABLE_TOPICS = Literal[
 
 class _SpotMessageParser:
     
-    def _topic(self, topic:str):
+    @staticmethod
+    def _topic(topic:str):
         return (
             topic.replace("sub.", "")
             .replace("push.", "")
@@ -38,24 +40,33 @@ class _SpotMessageParser:
             .replace(".pb", "")
             .split(".v3.api")[0]
         )
-        
-    def _is_auth_message(self,message:dict):
+    
+    @staticmethod
+    def _is_auth_message(message:dict):
         return message.get("channel", "") == "rs.login"
 
-    def _is_subscription_message(self, message:dict):
+    @staticmethod
+    def _is_subscription_message(message:dict):
         if message.get("id") == 0 and message.get("code") == 0 and message.get("msg"):
             return True
         else:
             return False
-
-    def _is_pong_message(self,message:dict):
+        
+    @staticmethod
+    def _is_pong_message(message:dict):
         return message.get("msg", "") in ("pong", "clientId","PONG")
-
-    def _is_error_message(self,message:dict):
+    
+    @staticmethod
+    def _is_error_message(message:dict):
         return message.get("channel", "") == "rs.error"
 
-class _AsyncWebSocketManagerV2(_SpotMessageParser):
+class _AsyncWebSocketManagerV2(ABC):
+
+    @property
+    @abstractmethod
+    def market_type(self):...
     
+
     def __init__(self,
                  base_callback = None,
                  use_common_callback = True,
@@ -80,8 +91,7 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
         self.proto = proto
         self._sending_limiter = sending_limiter or AsyncLimiter(max_rate = 100, time_period = 1)
         self.extend_proto_body = extend_proto_body
-        self.callback_directory = dict()
-
+        self.callback_directory:dict[str,Union[Callable,Awaitable]] = dict()
         self._sending_queue = asyncio.Queue()
         self._ping_message = json.dumps({"method": "ping"})
     
@@ -98,7 +108,7 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
         if self.extend_proto_body:
             return message
 
-        topic = self._topic(message.channel)
+        topic = _SpotMessageParser._topic(message.channel)
         bodies = {
             "public.kline": "publicSpotKline",
             "public.deals": "publicDeals",
@@ -293,6 +303,8 @@ class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
             "private.deals": lambda : [{}],
             "private.orders": lambda : [{}]
         }
+    #def set_callback(self, topic, callback_function:Union[Callable,Awaitable]):
+    #    return super()._set_callback(topic, callback_function)
 
     def _subscribe_one(self, callback: Callable, params: dict, message_shaper: Callable):
         subscribe_message = message_shaper(params)
@@ -341,8 +353,9 @@ class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
         pass
 
     async def _handle_message(self, message):
-
-        if isinstance(message, dict) and self._is_subscription_message(message):
+        
+        
+        if isinstance(message, dict) and _SpotMessageParser._is_subscription_message(message):
             self._process_subscription_message(message)
         else:
             await self._process_normal_message(message, return_wrapper_data = True)
@@ -354,11 +367,15 @@ class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
 class _SpotWebSocket(_SpotWebSocketManager):
     listenKey: str
 
+    @property
+    def market_type(self):
+        return "spot"
+    
     def __init__(
         self,
         endpoint: str = SPOT,
-        api_key: str = None,
-        api_secret: str = None,
+        #api_key: str = None,
+        #api_secret: str = None,
         loop: asyncio.AbstractEventLoop = None,
         common_callback = None,
         **kwargs,
@@ -368,8 +385,6 @@ class _SpotWebSocket(_SpotWebSocketManager):
         loop = loop or asyncio.get_event_loop()
         super().__init__(loop = loop, common_callback = common_callback, **kwargs)
 
-    async def connect(self):
-        await self._connect(self.endpoint)
 
     async def connect(self):
         self.connection_task = self.event_loop.create_task(self._connect(self.endpoint)) 
