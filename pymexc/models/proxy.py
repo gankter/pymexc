@@ -41,7 +41,7 @@ class ProxySettings(BaseModel):
         return v
 
     @field_validator("protocol")
-    def validate_protocol(cls, v):
+    def validate_protocol(cls, v:str):
         valid_protocols = ["http", "https", "socks4", "socks5"]
         if v.lower() not in valid_protocols:
             raise ValueError(f"Протокол должен быть одним из: {', '.join(valid_protocols)}")
@@ -51,6 +51,8 @@ class ProxySettings(BaseModel):
         """Формирует URL прокси для использования в WebSocket."""
         auth = f"{self.username}:{self.password}@" if self.username and self.password else ""
         return f"{self.protocol}://{auth}{self.host}:{self.port}"
+    
+    
 
 # Пример использования
 if __name__ == "__main__":
