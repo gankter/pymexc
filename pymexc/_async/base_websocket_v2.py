@@ -10,6 +10,7 @@ from aiolimiter import AsyncLimiter
 from typing import Callable, Union, Literal, get_args
 from websockets.exceptions import WebSocketException
 from pymexc.proto import ProtoTyping, PushDataV3ApiWrapper
+from pymexc.models.proxy import ProxySettings
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,8 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
                  loop = None,
                  proto = False,
                  sending_limiter:AsyncLimiter = None,
-                 extend_proto_body = False
+                 extend_proto_body = False,
+                 proxy_settings:ProxySettings = None
                  ) -> None:
  
         
@@ -82,6 +84,11 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
         self.extend_proto_body = extend_proto_body
         self.callback_directory = dict()
 
+        self.proxy_settings = proxy_settings
+        
+        
+        self.proxy_str = self.proxy_settings.get_proxy_url() if self.proxy_settings else None
+        
         self._sending_queue = asyncio.Queue()
         self._ping_message = json.dumps({"method": "ping"})
     
@@ -237,7 +244,10 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
                 #ctx = None
                 logger.debug(self.endpoint)
                 ctx = ssl.create_default_context()
-                conn = await websockets.connect(self.endpoint, ssl=ctx ,compression=None, proxy = None)
+                conn = await websockets.connect(self.endpoint, 
+                                                ssl=ctx ,
+                                                compression=None, 
+                                                proxy = self.proxy_str)
                 
             except (WebSocketException, ConnectionRefusedError, OSError) as e:
 
@@ -272,7 +282,7 @@ class _AsyncWebSocketManagerV2(_SpotMessageParser):
 
 class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
 
-    def __init__(self, base_callback=None, ping_interval=20, loop=None, proto=False,common_callback = None, **kwargs):
+    def __init__(self, base_callback=None, ping_interval=20, loop=None, proto=False, common_callback = None, **kwargs):
 
         super().__init__(base_callback = base_callback or self._handle_message,
                          ping_interval = ping_interval, 
