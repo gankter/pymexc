@@ -12,6 +12,8 @@ from typing import Awaitable, Callable, Union, Literal, get_args
 from websockets.exceptions import WebSocketException
 from pymexc.proto import ProtoTyping, PushDataV3ApiWrapper
 from pymexc.models.proxy import ProxySettings
+from pymexc.models.spot_subscriptions import SubscriptionParams, MessageShaper, Topics
+from pymexc.models.api_settings import ApiConfig
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +67,11 @@ class _AsyncWebSocketManagerV2(ABC):
 
     @property
     @abstractmethod
-    def market_type(self):...
-    
+    def market_type(self): ...
+ 
+    @property
+    def auth(self):
+        self.__api_config.auth
 
     def __init__(self,
                  base_callback = None,
@@ -74,66 +79,71 @@ class _AsyncWebSocketManagerV2(ABC):
                  commn_callback = None,
                  ping_interval = 20,
                  loop = None,
-                 proto = False,
                  sending_limiter:AsyncLimiter = None,
                  extend_proto_body = False,
-                 proxy_settings:ProxySettings = None
+                 proto = True,
+                 proxy_settings:ProxySettings = None,
+                 api_config: ApiConfig = ApiConfig(),
+                 proto_bodies = None
                  ) -> None:
  
         
         self.base_callback = base_callback 
         self.use_common_callback = use_common_callback
         self._commn_callback = commn_callback
+        self.use_common_callback_for_topic = False
+        
         self.ping_interval = ping_interval
+        self.event_loop:asyncio.AbstractEventLoop = loop
+        self.extend_proto_body = extend_proto_body
+        self.proxy_settings = proxy_settings
+        self.__api_config = api_config
+        
+        self._sending_limiter = sending_limiter or AsyncLimiter(max_rate = 100, time_period = 1)
+
+        self.use_proto = proto
+        if proto and proto_bodies is None:
+            raise ValueError("protobodies must be initialized")
+        self.proto_bodies = proto_bodies
+        
+        
         self.retries = 10
         self.subscriptions = []
         self.chunk_size = 50
         self._connected = False
-        self.event_loop:asyncio.AbstractEventLoop = loop
-        self.proto = proto
-        self._sending_limiter = sending_limiter or AsyncLimiter(max_rate = 100, time_period = 1)
-        self.extend_proto_body = extend_proto_body
         self.callback_directory = dict()
 
-        self.proxy_settings = proxy_settings
-        
         
         self.proxy_str = self.proxy_settings.get_proxy_url() if self.proxy_settings else None
         
         self._sending_queue = asyncio.Queue()
         self._ping_message = json.dumps({"method": "ping"})
     
-    def _set_callback(self, topic: str, callback_function: Callable):
-        self.callback_directory[topic] = callback_function
+    def _set_callback_sign(self, topic_sign: str, callback_function: Callable):
+        self.callback_directory[topic_sign] = callback_function
 
-    def _get_callback(self, topic: str) -> Union[Callable[..., None], None]:
-        return self.callback_directory.get(topic)
+    def _get_callback_sign(self, topic_sign: str) -> Union[Callable[..., None], None]:
+        return self.callback_directory.get(topic_sign)
+    
+    #REVIEW а нужно ли мне вообще колбеки по топикам делать?
+    def _set_callback_topic(self, topic:Topics):
+        pass
+    
+    def _get_callback_topic(self, topic:Topics):
+        pass
 
     def _pop_callback(self, topic: str) -> Union[Callable[..., None], None]:
         return self.callback_directory.pop(topic) if self.callback_directory.get(topic) else None
+
     
     def get_proto_body(self, message: ProtoTyping.PushDataV3ApiWrapper) -> dict:
         if self.extend_proto_body:
             return message
-
+        #TODO мб парсер пусть возвращает топик из enum?
         topic = _SpotMessageParser._topic(message.channel)
-        bodies = {
-            "public.kline": "publicSpotKline",
-            "public.deals": "publicDeals",
-            "public.aggre.depth": "publicAggreDepths",
-            "public.aggre.deals": "publicAggreDeals",
-            "public.increase.depth": "publicIncreaseDepths",
-            "public.limit.depth": "publicLimitDepths",
-            "public.bookTicker": "publicBookTicker",
-            "private.account": "privateAccount",
-            "private.deals": "privateDeals",
-            "private.orders": "privateOrders",
-        }
-        
 
-        if topic in bodies:
-            return getattr(message, bodies[topic])  # default=message
-
+        if topic in self.proto_bodies:
+            return getattr(message, self.proto_bodies[topic])  # default=message
         else:
             logger.warning(f"Body for topic {topic} not found. | Message: {message.__dict__}")
             return message
@@ -208,7 +218,8 @@ class _AsyncWebSocketManagerV2(ABC):
                 {"method": "SUBSCRIPTION",
                 "params": self.subscriptions}))
 
-    async def _process_normal_message(self, message: dict | ProtoTyping.PushDataV3ApiWrapper, parse_only: bool = True, return_wrapper_data = True):
+    #TODO сделать обработку таким образом что-бы можно для одних и тех же топиков устанавливать 1 коллбек
+    def _process_normal_message(self, message: dict | ProtoTyping.PushDataV3ApiWrapper, parse_only: bool = True, return_wrapper_data = True):
         """
         Redirect message to callback function
         """
@@ -231,8 +242,13 @@ class _AsyncWebSocketManagerV2(ABC):
         else:
             wrapper_data = None
         
-        callback_function =  self._commn_callback if self.use_common_callback else self._get_callback(topic) or self._commn_callback
-
+        if self.use_common_callback:
+            callback_function = self._commn_callback
+        elif self.use_common_callback_for_topic:
+            callback_function = self._get_callback_topic()
+        else:
+            callback_function = self._get_callback_sign(topic)
+            
         if not callback_function:
             logger.warning(f"Callback for topic {topic} not found. | Message: {message}")
             return None, None, None
@@ -294,51 +310,63 @@ class _AsyncWebSocketManagerV2(ABC):
 class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
 
     def __init__(self, base_callback=None, ping_interval=20, loop=None, proto=False, common_callback = None, **kwargs):
-
+        bodies = {
+            "public.kline": "publicSpotKline",
+            "public.deals": "publicDeals",
+            "public.aggre.depth": "publicAggreDepths",
+            "public.aggre.deals": "publicAggreDeals",
+            "public.increase.depth": "publicIncreaseDepths",
+            "public.limit.depth": "publicLimitDepths",
+            "public.bookTicker": "publicBookTicker",
+            "private.account": "privateAccount",
+            "private.deals": "privateDeals",
+            "private.orders": "privateOrders",
+        }
         super().__init__(base_callback = base_callback or self._handle_message,
                          ping_interval = ping_interval, 
                          loop = loop, 
                          proto = proto,
-                         common_callback = common_callback
+                         common_callback = common_callback,
+                         proto_bodies = bodies,
                          **kwargs)
         
-        self.set_avaliable_topics = set(get_args(SPOT_AVALIABLE_TOPICS))
-        self.message_shaper_dict = {
-            "public.aggre.deals": lambda params: f"spot@public.aggre.deals.v3.api{(".pb" if self.proto else "")}@{params['interval']}@{params['symbol']}",
-            "public.kline": lambda params: f"spot@public.kline.v3.api{(".pb" if self.proto else "")}@{params['interval']}@{params['symbol']}",
-            "public.aggre.depth": lambda params: f"spot@public.aggre.depth.v3.api{(".pb" if self.proto else "")}@{params['interval']}@{params['symbol']}", 
-            "public.limit.depth": lambda params: f"spot@public.limit.depth.v3.api{(".pb" if self.proto else "")}@{params['symbol']}@{params['level']}",
-            "public.aggre.bookTicker": lambda params: f"spot@public.aggre.bookTicker.v3.api{(".pb" if self.proto else "")}@{params['interval']}@{params['symbol']}",
-            "public.bookTicker.batch": lambda params: f"spot@public.bookTicker.batch.v3.api{(".pb" if self.proto else "")}@{params['symbol']}",
-            "private.account": lambda : [{}],
-            "private.deals": lambda : [{}],
-            "private.orders": lambda : [{}]
-        }
-    #def set_callback(self, topic, callback_function:Union[Callable,Awaitable]):
-    #    return super()._set_callback(topic, callback_function)
+        self.__avaliable_topics = set(get_args(SPOT_AVALIABLE_TOPICS))
+        self.current_subscribed_topics:dict[Topics,int] = dict().fromkeys(Topics._member_map_.values(), 0)
+        
 
-    def _subscribe_one(self, callback: Callable, params: dict, message_shaper: Callable):
-        subscribe_message = message_shaper(params)
+
+    def _subscribe_one(self, callback: Callable, topic:Topics, params: dict):
+
+        params['proto'] = self.use_proto
+        
+        subscribe_message = MessageShaper.shape_message(sub_type = topic, params = SubscriptionParams(**params))
         self.subscriptions.append(subscribe_message)
+        self.current_subscribed_topics[topic] += 1
         if not self.use_common_callback:
-            self._set_callback(topic = subscribe_message, callback_function = callback )
+            self._set_callback_sign(topic = subscribe_message, callback_function = callback )
         return subscribe_message
     
-    def _unsubscribe_one(self, topic: str, params: dict, message_shaper: Callable = None):
-        subscribe_message = message_shaper(params)
+    #TODO чекнуть а вообще подписывался ли я на топик что-бы отписываться от него
+    def _unsubscribe_one(self, topic: Topics, params: dict):
         
+        params['proto'] = self.use_proto
+        
+        
+        
+        subscribe_message = MessageShaper.shape_message(sub_type = topic, params = SubscriptionParams(**params))
         self.subscriptions.remove(subscribe_message)
+        self.current_subscribed_topics[topic] -= 1
         if self.use_common_callback:
             self._pop_callback(topic = subscribe_message)
-        logger.debug(f"Unsubscribed from {topic} with subscription message {subscribe_message}")
+        logger.debug(f"Unsubscribed from {topic.value} with subscription message {subscribe_message}")
         return subscribe_message
 
-    async def subscribe(self, topic: SPOT_AVALIABLE_TOPICS, params_list: list, callback: Callable = None):
+    async def subscribe(self, topic: Topics, params_list: list, callback: Callable = None):
         
-        if not topic in self.set_avaliable_topics:
-            raise ValueError("unknow topic name")
+        #if not topic in self.__avaliable_topics:
+        #    raise ValueError("unknow topic name")
     
-        subscription_args_params = [self._subscribe_one(callback, params, self.message_shaper_dict[topic]) for params in params_list ]
+        subscription_args_params = [self._subscribe_one(callback, topic, params) for params in params_list ]
         subscription_args = {
             "method": "SUBSCRIPTION",
             "params": subscription_args_params,
@@ -346,12 +374,12 @@ class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
         await asyncio.sleep(0.1)
         self.write(json.dumps(subscription_args))
 
-    async def unsubscribe(self, topic: SPOT_AVALIABLE_TOPICS, params_list:list[dict]):
+    async def unsubscribe(self, topic: Topics, params_list:list[dict]):
 
-        if not topic in self.set_avaliable_topics:
+        if not topic in self.__avaliable_topics:
             raise ValueError("unknow topic name")
         
-        unsub_args_params = [self._unsubscribe_one(topic, params, self.message_shaper_dict[topic]) for params in params_list ]
+        unsub_args_params = [self._unsubscribe_one(topic, params) for params in params_list ]
         self.write(json.dumps(
             {
                 "method": "UNSUBSCRIPTION",
@@ -361,18 +389,14 @@ class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
 
     def _process_subscription_message(self,message):
         print(f"sub: {message}")
-        pass
-
-    async def _handle_message(self, message):
         
+
+    def _handle_message(self, message):
         
         if isinstance(message, dict) and _SpotMessageParser._is_subscription_message(message):
             self._process_subscription_message(message)
         else:
-            await self._process_normal_message(message, return_wrapper_data = True)
-
-            
-        
+            self._process_normal_message(message, return_wrapper_data = True)
 
 
 class _SpotWebSocket(_SpotWebSocketManager):
@@ -385,8 +409,6 @@ class _SpotWebSocket(_SpotWebSocketManager):
     def __init__(
         self,
         endpoint: str = SPOT,
-        #api_key: str = None,
-        #api_secret: str = None,
         loop: asyncio.AbstractEventLoop = None,
         common_callback = None,
         **kwargs,
@@ -404,15 +426,12 @@ class _SpotWebSocket(_SpotWebSocketManager):
         self.connection_task.cancel()
         await asyncio.sleep(0.2)
 
-    async def _ws_subscribe(self, topic:SPOT_AVALIABLE_TOPICS, params_list: list[dict], callback = None):
-
+    async def _ws_subscribe(self, topic:Topics, params_list: list[dict], callback = None):
         if not self._connected:
-            print("подключаюсь")
             #raise ValueError("Не подключено")
             await self._connect(self.endpoint)
             await asyncio.sleep(0.1)
             
-        print(f"отправляю топик {topic}")
         await self.subscribe(topic, callback, params_list)
 
     

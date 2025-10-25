@@ -46,13 +46,13 @@ logger = logging.getLogger(__name__)
 from pymexc._async.base_websocket_v2 import _SpotWebSocket, SPOT as SPOT_WS
 
 from pymexc.models.proxy import ProxySettings
-from pymexc.models.api_auth import ApiAuth
-
+from pymexc.models.api_settings import ApiConfig
+from pymexc.models.spot_subscriptions import Topics
 
 class WebSocket(_SpotWebSocket):
     def __init__(
         self,
-        api_auth: ApiAuth = None,
+        api_auth: ApiConfig = None,
         listenKey: Optional[str] = None,
         #ping_interval: Optional[int] = 20,
         #ping_timeout: Optional[int] = None,
@@ -212,14 +212,14 @@ class WebSocket(_SpotWebSocket):
         else:
             symbols = symbol  # list
         params_list = [dict(symbol = s, interval = interval) for s in symbols]
-        topic = "public.aggre.deals"
+        #topic = "public.aggre.deals"
   
-        await self._ws_subscribe(topic, callback, params_list)
+        await self._ws_subscribe(Topics.PUBLIC_AGGRE_DEALS, callback, params_list)
 
     async def public_kline_stream(self, 
                            callback: Callable[..., None], 
                            symbol: Union[str, List[str]], 
-                           interval: Literal["Min1", "Min5", "Min15", "Min30", "Min60", "Hour4", "Hour8","Day1", "Week1","Month1"]):
+                           interval: Literal["Min1", "Min5", "Min15", "Min30", "Min60", "Hour4", "Hour8","Day1", "Week1", "Month1"]):
         """
         ### Kline Streams
         The Kline/Candlestick Stream push updates to the current klines/candlestick every second.
@@ -244,9 +244,9 @@ class WebSocket(_SpotWebSocket):
 
         params_list = [dict(symbol = s, interval = interval) for s in symbols]
 
-        topic = "public.kline"
+        #topic = "public.kline"
         
-        await self._ws_subscribe(topic, callback, params_list)
+        await self._ws_subscribe(Topics.PUBLIC_KLINE, callback, params_list)
 
     async def public_aggre_depth_stream(self, callback: Callable[..., None], symbol: Union[str, List[str]], interval: Literal["10ms","100ms"]):
         """
@@ -269,8 +269,8 @@ class WebSocket(_SpotWebSocket):
 
         params_list = [dict(symbol = s, interval = interval) for s in symbols]
 
-        topic = "public.aggre.depth"
-        await self._ws_subscribe(topic, callback, params_list)
+        #topic = "public.aggre.depth"
+        await self._ws_subscribe(Topics.PUBLIC_AGGRE_DEPTH, callback, params_list)
 
     async def public_limit_depth_stream(self, callback: Callable[..., None], symbol: Union[str, List[str]], level: Literal[5,10,20]):
         """
@@ -294,8 +294,8 @@ class WebSocket(_SpotWebSocket):
             symbols = symbol  # list
         
         params_list = [dict(symbol = s, level = level) for s in symbols]
-        topic = "public.limit.depth"
-        await self._ws_subscribe(topic, callback, params_list)
+        #topic = "public.limit.depth"
+        await self._ws_subscribe(Topics.PUBLIC_LIMIT_DEPTH, callback, params_list)
 
     async def public_aggre_bookTicker_stream(self, callback: Callable[..., None], symbol: Union[str, List[str]]):
         """
@@ -318,8 +318,8 @@ class WebSocket(_SpotWebSocket):
         
         params_list = [dict(symbol = s) for s in symbols]
 
-        topic = "public.aggre.bookTicker"
-        await self._ws_subscribe(topic, callback, params_list)
+        #topic = "public.aggre.bookTicker"
+        await self._ws_subscribe(Topics.PUBLIC_AGGRE_BOOK_TICKER, callback, params_list)
 
     async def public_bookTicker_batch_stream(self, callback: Callable[..., None], symbol: Union[str, List[str]]):
         """
@@ -342,8 +342,8 @@ class WebSocket(_SpotWebSocket):
 
         params_list = [dict(symbol=s) for s in symbols]
 
-        topic = "public.bookTicker.batch"
-        await self._ws_subscribe(topic, callback, params_list)
+        #topic = "public.bookTicker.batch"
+        await self._ws_subscribe(Topics.PUBLIC_BOOK_TICKER_BATCH, callback, params_list)
 
     # <=================================================================>
     #
@@ -364,8 +364,8 @@ class WebSocket(_SpotWebSocket):
         :return: None
         """
         params = [{}]
-        topic = "private.account"
-        await self._ws_subscribe(topic, callback, params)
+        #topic = "private.account"
+        await self._ws_subscribe(Topics.PRIVATE_ACCOUNT, callback, params)
 
     async def private_account_deals(self, callback: Callable[..., None]):
         """
@@ -379,8 +379,8 @@ class WebSocket(_SpotWebSocket):
         :return: None
         """
         params = [{}]
-        topic = "private.deals"
-        await self._ws_subscribe(topic, callback, params)
+        #topic = "private.deals"
+        await self._ws_subscribe(Topics.PRIVATE_DEALS, callback, params)
 
     async def private_account_orders(self, callback: Callable[..., None]):
         """
@@ -394,5 +394,5 @@ class WebSocket(_SpotWebSocket):
         :return: None
         """
         params = [{}]
-        topic = "private.orders"
-        await self._ws_subscribe(topic, callback, params)
+        #topic = "private.orders"
+        await self._ws_subscribe(Topics.PRIVATE_ORDERS, callback, params)
