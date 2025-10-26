@@ -36,7 +36,7 @@ class SubscriptionParams(BaseModel):
     symbol: str = None
     interval: str = None
     level: str = None
-    #proto: bool = False
+    proto: bool = False
 
 
 class MessageShaper:
@@ -72,7 +72,7 @@ class MessageShaper:
     
     @staticmethod
     def shape_message(sub_type: Topics, params: SubscriptionParams = None, gzip:bool = None) -> str:
-
+        params.proto = None
         return json.dumps({
             "method": "",
             "params": params.model_dump(exclude_none=True),
