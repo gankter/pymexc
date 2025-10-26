@@ -125,6 +125,9 @@ class _AsyncWebSocketManagerV2(ABC):
     def _get_callback_sign(self, topic_sign: str) -> Union[Callable[..., None], None]:
         return self.callback_directory.get(topic_sign)
     
+    def _pop_callback_sign(self, topic_sign: str) -> Union[Callable[..., None], None]:
+        return self.callback_directory.pop(topic_sign, None)
+    
     #REVIEW а нужно ли мне вообще колбеки по топикам делать?
     def _set_callback_topic(self, topic:Topics):
         pass
@@ -305,6 +308,18 @@ class _AsyncWebSocketManagerV2(ABC):
                         task.cancel()
 
 
+# # # # # # # # # #
+#                 #
+#     FUTURES     #
+#                 #
+# # # # # # # # # #
+
+
+class _FuturesWebSocketManager(_AsyncWebSocketManagerV2):
+
+    pass
+
+
 
 
 class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
@@ -343,7 +358,7 @@ class _SpotWebSocketManager(_AsyncWebSocketManagerV2):
         self.subscriptions.append(subscribe_message)
         self.current_subscribed_topics[topic] += 1
         if not self.use_common_callback:
-            self._set_callback_sign(topic = subscribe_message, callback_function = callback )
+            self._set_callback_sign(topic_sign = subscribe_message, callback_function = callback )
         return subscribe_message
     
     #TODO чекнуть а вообще подписывался ли я на топик что-бы отписываться от него
