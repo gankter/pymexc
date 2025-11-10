@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
 
 """
-:author: abuztrade
+:author: gankter
 :license: MIT License, see LICENSE file.
-:copyright: (c) 2022 by abuztrade.
+:copyright: (c) 2025 by gankter.
 """
 
 
@@ -16,7 +16,7 @@ setup(
     name="pymexc",
     version=version,
     author="gankter",
-    author_email="abuztrade.work@gmail.com",
+    author_email="",
     url="https://github.com/gankter/pymexc.git",
     download_url=f"https://github.com/gankter/pymexc/archive/refs/tags/v{version}.zip",
     description="Unofficial python library for interacting with the MEXC crypto exchange",
@@ -55,6 +55,7 @@ setup(
             "**/*.pyi",
             "web/*",
             "_async/*",
+            "models/*"
             "proto/*",
         ]
         for package in find_packages()
