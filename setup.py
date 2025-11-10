@@ -15,10 +15,10 @@ with open("README.md", "r") as f:
 setup(
     name="pymexc",
     version=version,
-    author="abuztrade",
+    author="gankter",
     author_email="abuztrade.work@gmail.com",
-    url="https://github.com/makarworld/pymexc.git",
-    download_url=f"https://github.com/makarworld/pymexc/archive/refs/tags/v{version}.zip",
+    url="https://github.com/gankter/pymexc.git",
+    download_url=f"https://github.com/gankter/pymexc/archive/refs/tags/v{version}.zip",
     description="Unofficial python library for interacting with the MEXC crypto exchange",
     packages=["pymexc"],
     install_requires=[
@@ -62,7 +62,7 @@ setup(
     zip_safe=False,
     project_urls={
         "Bug Reports": "https://github.com/makarworld/pymexc/issues",
-        "Source": "https://github.com/makarworld/pymexc",
+        "Source": "https://github.com/gankter/pymexc",
     },
     keywords=[
         "mexc",
