@@ -57,7 +57,7 @@ setup(
             "**/*.pyi",
             "web/*",
             "_async/*",
-            "models/*"
+            "models/*",
             "proto/*",
         ]
         for package in find_packages()
