@@ -49,7 +49,7 @@ while True:
 import logging
 
 try:
-    from . import _async, futures, proto, spot, web
+    from . import _async, futures, proto, spot, web, models
     from ._async.futures import HTTP as AsyncFuturesHTTP
     from ._async.futures import WebSocket as AsyncFuturesWebSocket
     from ._async.spot import HTTP as AsyncSpotHTTP
@@ -64,6 +64,7 @@ except ImportError:
     import pymexc.proto as proto
     import pymexc.spot as spot
     import pymexc.web as web
+    import pymexc.models as models
     from pymexc._async.futures import HTTP as AsyncFuturesHTTP
     from pymexc._async.futures import WebSocket as AsyncFuturesWebSocket
     from pymexc._async.spot import HTTP as AsyncSpotHTTP
@@ -78,7 +79,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "_async",
-    "models"
+    "models",
     "futures",
     "spot",
     "web",
