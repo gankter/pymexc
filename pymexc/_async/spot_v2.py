@@ -34,7 +34,6 @@ while True:
 
 import asyncio
 import logging
-from asyncio import AbstractEventLoop
 from typing import Callable, List, Literal, Optional, Union
 import warnings
 
@@ -44,32 +43,18 @@ logger = logging.getLogger(__name__)
 
     #from pymexc._async.base import _SpotHTTP, SPOT as SPOT_HTTP
 from pymexc._async.base_websocket_v2 import _SpotWebSocket, SPOT as SPOT_WS
-
-from pymexc.models.proxy import ProxySettings
-from pymexc.models.api_settings import ApiConfig
+from pymexc.models import ApiSettings, ProxySettings, CallbackSettings
 from pymexc.models.spot_subscriptions import Topics
 
 class WebSocket(_SpotWebSocket):
     def __init__(
         self,
-        api_auth: ApiConfig = None,
+        callback_settings: CallbackSettings,
+        api_settings: ApiSettings = ApiSettings(),
         listenKey: Optional[str] = None,
-        #ping_interval: Optional[int] = 20,
-        #ping_timeout: Optional[int] = None,
-        #retries: Optional[int] = 10,
-        #restart_on_error: Optional[bool] = True,
-        #trace_logging: Optional[bool] = False,
-        #http_proxy_host: Optional[str] = None,
-        #http_proxy_port: Optional[int] = None,
-        #http_no_proxy: Optional[list] = None,
-        #http_proxy_auth: Optional[tuple] = None,
-        #http_proxy_timeout: Optional[int] = None,
         proxy_settings:ProxySettings = None,
-        loop: Optional[AbstractEventLoop] = None,
-        proto: Optional[bool] = False,
-        extend_proto_body: Optional[bool] = False,
-        use_common_callback = False,
-        commn_callback = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
+        proto: Optional[bool] = True,
     ):
         """
         Initializes the class instance with the provided arguments.
@@ -124,33 +109,18 @@ class WebSocket(_SpotWebSocket):
         :type extend_proto_body: bool
         """
         loop = loop or asyncio.get_event_loop()
-
-        kwargs = dict(
-            #api_key=api_key,
-            #api_secret=api_secret,
-           # ping_interval=ping_interval,
-            #ping_timeout=ping_timeout,
-            #retries=retries,
-            #restart_on_error=restart_on_error,
-            #trace_logging=trace_logging,
-            #http_proxy_host=http_proxy_host,
-            #http_proxy_port=http_proxy_port,
-           # http_no_proxy=http_no_proxy,
-            #http_proxy_auth=http_proxy_auth,
-            #http_proxy_timeout=http_proxy_timeout,
-            loop=loop,
-            proto = proto,
-            extend_proto_body = extend_proto_body,
-            use_common_callback = use_common_callback,
-            commn_callback = commn_callback,
-        )
+        
         self.listenKey = listenKey
 
-        super().__init__(**kwargs)
+        super().__init__(loop=loop,
+                         callback_settings=callback_settings,
+                         api_settings=api_settings,
+                         proxy_settings=proxy_settings,
+                         )
 
         # for keep alive connection to private spot websocket
         # need to send listen key at connection and send keep-alive request every 60 mins
-        if api_auth.api_key and api_auth.api_secret:
+        if api_settings.api_key and api_settings.api_secret:
             # setup keep-alive connection loop
             loop.create_task(self._keep_alive_loop())
 

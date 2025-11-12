@@ -4,7 +4,7 @@ import hmac
 
 from pydantic import BaseModel, field_validator, ValidationInfo
     
-class ApiConfig(BaseModel):
+class ApiSettings(BaseModel):
     
     auth:bool = False
     api_key:str = None
@@ -46,5 +46,5 @@ class ApiConfig(BaseModel):
     
     
 if __name__ == "__main__":
-    x = ApiConfig(auth=False, api_key="", api_secret="dsf43")
+    x = ApiSettings(auth=False, api_key="", api_secret="dsf43")
     print(x)

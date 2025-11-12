@@ -33,7 +33,8 @@ while True:
 """
 
 import logging
-from asyncio import AbstractEventLoop
+#from asyncio import AbstractEventLoop
+import asyncio
 from typing import Awaitable, Callable, Dict, List, Literal, Optional, Union
 import warnings
 
@@ -62,45 +63,82 @@ FUTURES_PERSONAL_TOPICS = [
 #    from ..base_websocket import FUTURES_PERSONAL_TOPICS, _FuturesWebSocket
 #except ImportError:
 from pymexc._async.base import _FuturesHTTP
-from pymexc._async.base_websocket import _FuturesWebSocket
+from pymexc._async.base_websocket_v2 import _FuturesWebSocket
 from ..base_websocket import FUTURES_PERSONAL_TOPICS
 
+from pymexc.models import ApiSettings, ProxySettings, CallbackSettings, FuturesTopics
 
 class WebSocket(_FuturesWebSocket):
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
-        loop: Optional[AbstractEventLoop] = None,
-        personal_callback: Optional[Awaitable[Callable[..., None]]] = None,
-        ping_interval: Optional[int] = 20,
-        ping_timeout: Optional[int] = None,
-        retries: Optional[int] = 10,
-        restart_on_error: Optional[bool] = True,
-        trace_logging: Optional[bool] = False,
-        #http_proxy_host: Optional[str] = None,
-        #http_proxy_port: Optional[int] = None,
-        #http_no_proxy: Optional[list] = None,
-        #http_proxy_auth: Optional[tuple] = None,
-        #http_proxy_timeout: Optional[int] = None,
+        callback_settings: CallbackSettings,
+        api_settings: ApiSettings = ApiSettings(),
+        listenKey: Optional[str] = None,
+        proxy_settings:ProxySettings = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         proto: Optional[bool] = False,
     ):
-        super().__init__(
-            api_key=api_key,
-            api_secret=api_secret,
-            subscribe_callback=personal_callback,
-            ping_interval=ping_interval,
-            ping_timeout=ping_timeout,
-            retries=retries,
-            restart_on_error=restart_on_error,
-            trace_logging=trace_logging,
-            #http_proxy_host=http_proxy_host,
-            #http_proxy_port=http_proxy_port,
-            #http_no_proxy=http_no_proxy,
-            #http_proxy_auth=http_proxy_auth,
-            #http_proxy_timeout=http_proxy_timeout,
-            loop=loop,
-        )
+        """
+        Initializes the class instance with the provided arguments.
+
+        :param api_key: API key for authentication. (Optional)
+        :type api_key: str
+
+        :param api_secret: API secret for authentication. (Optional)
+        :type api_secret: str
+
+        :param listenKey: The listen key for the connection to private channels.
+                          If not provided, a listen key will be generated from HTTP api [Permission: SPOT_ACCOUNT_R] (Optional)
+        :type listenKey: str
+
+        :param ping_interval: The interval in seconds to send a ping request. (Optional)
+        :type ping_interval: int
+
+        :param ping_timeout: The timeout in seconds for a ping request. (Optional)
+        :type ping_timeout: int
+
+        :param retries: The number of times to retry a request. (Optional)
+        :type retries: int
+
+        :param restart_on_error: Whether or not to restart the connection on error. (Optional)
+        :type restart_on_error: bool
+
+        :param trace_logging: Whether or not to enable trace logging. (Optional)
+        :type trace_logging: bool
+
+        :param http_proxy_host: The host for the HTTP proxy. (Optional)
+        :type http_proxy_host: str
+
+        :param http_proxy_port: The port for the HTTP proxy. (Optional)
+        :type http_proxy_port: int
+
+        :param http_no_proxy: A list of hosts to exclude from the HTTP proxy. (Optional)
+        :type http_no_proxy: list
+
+        :param http_proxy_auth: The authentication for the HTTP proxy. (Optional)
+        :type http_proxy_auth: tuple
+
+        :param http_proxy_timeout: The timeout for the HTTP proxy. (Optional)
+        :type http_proxy_timeout: int
+
+        :param loop: The event loop to use for the connection. (Optional)
+        :type loop: AbstractEventLoop
+
+        :param proto: Whether or not to use the proto protocol. (Optional)
+        :type proto: bool
+
+        :param extend_proto_body: Whether or not to extend the proto body. (Optional)
+        :type extend_proto_body: bool
+        """
+        loop = loop or asyncio.get_event_loop()
+        
+        self.listenKey = listenKey
+
+        super().__init__(loop=loop,
+                         callback_settings=callback_settings,
+                         api_settings=api_settings,
+                         proxy_settings=proxy_settings,
+                         )
 
         if proto:
             warnings.warn("proto is not supported in futures websocket api", DeprecationWarning)
@@ -129,7 +167,7 @@ class WebSocket(_FuturesWebSocket):
         :return: None
         """
         params = {}
-        topic = "tickers"
+        topic = FuturesTopics.PUBLIC_TICKERS
         await self._ws_subscribe(topic, callback, params)
 
     async def ticker_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -152,7 +190,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "ticker"
+        topic = FuturesTopics.PUBLIC_SINGLE_TICKER
         await self._ws_subscribe(topic, callback, params)
 
     async def deal_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -174,7 +212,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "deal"
+        topic = FuturesTopics.PUBLIC_DEALS
         await self._ws_subscribe(topic, callback, params)
 
     async def depth_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -197,7 +235,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "depth"
+        topic = FuturesTopics.PUBLIC_DEPTH
         await self._ws_subscribe(topic, callback, params)
 
     async def depth_full_stream(self, callback: Awaitable[Callable[..., None]], symbol: str, limit: int = 20):
@@ -220,7 +258,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "depth.full"
+        topic = FuturesTopics.PUBLIC_DEPTH_FULL
         await self._ws_subscribe(topic, callback, params)
 
     async def kline_stream(
@@ -249,7 +287,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "kline"
+        topic = FuturesTopics.PUBLIC_KLINE
         await self._ws_subscribe(topic, callback, params)
 
     async def funding_rate_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -271,7 +309,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "funding.rate"
+        topic = FuturesTopics.PUBLIC_FUNDING_RATE
         await self._ws_subscribe(topic, callback, params)
 
     async def index_price_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -293,7 +331,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "index.price"
+        topic = FuturesTopics.PUBLIC_INDEX_PRICE
         await self._ws_subscribe(topic, callback, params)
 
     async def fair_price_stream(self, callback: Awaitable[Callable[..., None]], symbol: str):
@@ -314,7 +352,7 @@ class WebSocket(_FuturesWebSocket):
         # clear none values
         params = {k: v for k, v in params.items() if v is not None}
 
-        topic = "fair.price"
+        topic = FuturesTopics.PUBLIC_FAIR_PRICE
         await self._ws_subscribe(topic, callback, params)
 
     # <=================================================================>

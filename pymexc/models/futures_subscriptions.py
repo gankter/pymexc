@@ -1,20 +1,8 @@
-
+import json
+from typing import Literal
 from pydantic import BaseModel
 from enum import Enum
-import json
 
-
-self.message_shaper_dict = {
-            "tickers": lambda params: f"futures@ticker{(".pb" if self.proto else "")}@_",
-            "deal": lambda params: f"futures@deal{(".pb" if self.proto else "")}@{params['symbol']}",
-            "depth": lambda params: f"futures@depth{(".pb" if self.proto else "")}@{params['symbol']}", 
-            "depth.full": lambda params: f"futures@depth.full{(".pb" if self.proto else "")}@{params['symbol']}",
-            "kline": lambda params: f"futures@kline{(".pb" if self.proto else "")}@{params['symbol']}@{params['interval']}",
-            "funding.rate": lambda params: f"futures@public.bookTicker.batch.v3.api{(".pb" if self.proto else "")}@{params['symbol']}",
-            "index.price": lambda : [{}],
-            "fair.price": lambda : [{}],
-            "filter": lambda : [{}]
-        }
 
 class Topics(Enum):
     PUBLIC_TICKERS = "tickers"
@@ -71,10 +59,12 @@ class MessageShaper:
         )
     
     @staticmethod
-    def shape_message(sub_type: Topics, params: SubscriptionParams = None, gzip:bool = None) -> str:
+    def shape_message(action:Literal["sub","unsub"], sub_type: Topics, params: SubscriptionParams = None, gzip:bool = None) -> str:
         params.proto = None
         return json.dumps({
-            "method": "",
+            "method": f"{action}.{sub_type.value}",
             "params": params.model_dump(exclude_none=True),
             "gzip": gzip
         }, allow_nan=False)
+        
+# 111090,398676,26

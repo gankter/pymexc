@@ -56,6 +56,7 @@ except ImportError:
     import pymexc._async.spot as spot
     import pymexc._async.base_websocket_v2 as base_websocket_v2
     import pymexc._async.spot_v2 as spot_v2
+    import pymexc._async.futures_v2 as futures_v2
 
 
 if os.name == "nt":
@@ -72,4 +73,4 @@ if os.name == "nt":
     """
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-__all__ = ["futures", "spot", "spot_v2", "base_websocket_v2","web"]
+__all__ = ["futures", "spot", "futures_v2", "spot_v2", "base_websocket_v2","web"]

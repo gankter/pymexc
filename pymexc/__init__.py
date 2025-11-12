@@ -52,8 +52,10 @@ try:
     from . import _async, futures, proto, spot, web, models
     from ._async.futures import HTTP as AsyncFuturesHTTP
     from ._async.futures import WebSocket as AsyncFuturesWebSocket
+    from ._async.futures_v2 import WebSocket as AsyncFuturesWebSocketV2
     from ._async.spot import HTTP as AsyncSpotHTTP
     from ._async.spot import WebSocket as AsyncSpotWebSocket
+    from ._async.spot_v2 import WebSocket as AsyncSpotWebSocketV2
     from .futures import HTTP as FuturesHTTP
     from .futures import WebSocket as FuturesWebSocket
     from .spot import HTTP as SpotHTTP
@@ -67,8 +69,10 @@ except ImportError:
     import pymexc.models as models
     from pymexc._async.futures import HTTP as AsyncFuturesHTTP
     from pymexc._async.futures import WebSocket as AsyncFuturesWebSocket
+    from pymexc._async.futures_v2 import WebSocket as AsyncFuturesWebSocketV2
     from pymexc._async.spot import HTTP as AsyncSpotHTTP
     from pymexc._async.spot import WebSocket as AsyncSpotWebSocket
+    from pymexc._async.spot_v2 import WebSocket as AsyncSpotWebSocketV2
     from pymexc.futures import HTTP as FuturesHTTP
     from pymexc.futures import WebSocket as FuturesWebSocket
     from pymexc.spot import HTTP as SpotHTTP
@@ -86,8 +90,10 @@ __all__ = [
     "proto",
     "AsyncFuturesHTTP",
     "AsyncFuturesWebSocket",
+    "AsyncFuturesWebSocketV2",
     "AsyncSpotHTTP",
     "AsyncSpotWebSocket",
+    "AsyncSpotWebSocketV2",
     "FuturesHTTP",
     "FuturesWebSocket",
     "SpotHTTP",
